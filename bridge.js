@@ -1,111 +1,203 @@
-// bridge.js (v4 friendly)
-// This version updates the original bridge for Socket.IO v4 compatibility
-// and adds better logging, error handling, and Windows-friendly settings.
+// bridge.js (v4 friendly, Windows-friendly)
+// This version updates the original bridge for Socket.IO v4 compatibility,
+// adds local IP discovery, clearer logging, better error handling,
+// and Windows-friendly defaults (IPv4 + 0.0.0.0 binding).
 
+// ---------------------------
+// Imports
+// ---------------------------
 const http = require('http')
 const { Server } = require('socket.io')
 const osc = require('node-osc')
+const os = require('os')
 
-// Allow port override via environment variable, default to 8081
-const PORT = process.env.PORT || 8081
+// ---------------------------
+// Config (env overridable)
+// ---------------------------
+const WS_PORT = Number(process.env.PORT || 8081)
+const DEFAULT_OSC_SERVER_HOST = process.env.OSC_SERVER_HOST || '0.0.0.0' // receive (from TouchOSC)
+const DEFAULT_OSC_SERVER_PORT = Number(process.env.OSC_SERVER_PORT || 3333)
+const DEFAULT_OSC_CLIENT_HOST = process.env.OSC_CLIENT_HOST || '127.0.0.1' // send (to Processing/DAW/etc.)
+const DEFAULT_OSC_CLIENT_PORT = Number(process.env.OSC_CLIENT_PORT || 3334)
 
-// Create an explicit HTTP server (instead of passing the port directly to socket.io)
-// This makes the setup clearer and more compatible with Socket.IO v4+
-const httpServer = http.createServer()
+// Optional: very-verbose OSC logging (set VERBOSE_OSC=1)
+const VERBOSE_OSC = process.env.VERBOSE_OSC === '1'
 
-// Create the Socket.IO server and allow any origin (useful for local testing)
+// ---------------------------
+// Helpers
+// ---------------------------
+function getLocalIPv4() {
+  const nics = os.networkInterfaces()
+  for (const name of Object.keys(nics)) {
+    for (const iface of nics[name]) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        return iface.address
+      }
+    }
+  }
+  return null
+}
+
+// Pretty print an OSC array (node-osc format)
+function prettyOsc(msg) {
+  try {
+    if (!Array.isArray(msg) || msg.length === 0) return String(msg)
+    const [addr, ...args] = msg
+    return `${addr} ${args.map((a) => JSON.stringify(a)).join(' ')}`
+  } catch {
+    return String(msg)
+  }
+}
+
+// ---------------------------
+// HTTP + Socket.IO server
+// ---------------------------
+const httpServer = http.createServer((req, res) => {
+  // Tiny health/info endpoint (no Express needed)
+  if (req.url === '/' || req.url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' })
+    res.end('OSC <-> WebSocket bridge is running.\n')
+    return
+  }
+  res.writeHead(404)
+  res.end()
+})
+
 const io = new Server(httpServer, {
+  // For local development, allow any origin. For production, restrict this.
   cors: { origin: '*' },
 })
 
-// Keep track of active OSC servers/clients
-let oscServer = null
-let oscClient = null
-let isConnected = false
-
-// Start the HTTP server and print a clear log message
-httpServer.listen(PORT, () => {
-  console.log(`✅ Socket.IO listening on http://localhost:${PORT}`)
+httpServer.listen(WS_PORT, () => {
+  const ip = getLocalIPv4()
+  console.log('──────────────────────────────────────────────')
+  console.log(`🖥️  Local IP: ${ip || 'Unavailable'}`)
+  console.log(`👉 Use this IP in TouchOSC → Host: ${ip || 'check ipconfig'}`)
+  console.log(`🔌 Socket.IO listening on http://0.0.0.0:${WS_PORT}`)
+  console.log('──────────────────────────────────────────────')
 })
 
-// Handle web socket connections
+// ---------------------------
+// OSC server/client lifecycle
+// ---------------------------
+let oscServer = null // receives from TouchOSC (UDP)
+let oscClient = null // sends to Processing/DAW/etc. (UDP)
+
+// Utility to (re)create OSC endpoints safely
+function setupOsc(serverHost, serverPort, clientHost, clientPort) {
+  // Kill any previous instances
+  try {
+    oscServer && oscServer.kill()
+  } catch {}
+  try {
+    oscClient && oscClient.kill()
+  } catch {}
+  oscServer = null
+  oscClient = null
+
+  // Create new ones
+  oscServer = new osc.Server(serverPort, serverHost)
+  oscClient = new osc.Client(clientHost, clientPort)
+
+  console.log(`🎛️  OSC Server listening on  ${serverHost}:${serverPort} (UDP)`)
+  console.log(`📤 OSC Client sending to     ${clientHost}:${clientPort} (UDP)`)
+
+  // Forward any incoming OSC messages to ALL web clients
+  oscServer.on('message', (msg, rinfo) => {
+    if (VERBOSE_OSC) {
+      console.log(
+        `📥 OSC IN  ${rinfo.address}:${rinfo.port} → ${prettyOsc(msg)}`
+      )
+    }
+    // Emit using a dedicated "osc" event…
+    io.emit('osc', { msg, from: rinfo })
+    // …and also "message" for backward compatibility with older sketches
+    io.emit('message', msg)
+  })
+
+  // Basic error logging for the UDP socket
+  oscServer._sock &&
+    oscServer._sock.on('error', (err) => {
+      console.error('⚠️  OSC Server socket error:', err.message)
+    })
+}
+
+// Initialize with defaults so it works even before a web client configures it
+setupOsc(
+  DEFAULT_OSC_SERVER_HOST,
+  DEFAULT_OSC_SERVER_PORT,
+  DEFAULT_OSC_CLIENT_HOST,
+  DEFAULT_OSC_CLIENT_PORT
+)
+
+// ---------------------------
+// Socket.IO handlers
+// ---------------------------
 io.on('connection', (socket) => {
   console.log('🔌 Web client connected:', socket.id)
 
-  // Wait for the "config" message from the web client (p5.js or browser)
-  socket.on('config', (obj) => {
+  // Optional heartbeat so the client can verify connectivity
+  socket.emit('connected', 1)
+
+  // Client can (re)configure OSC endpoints at runtime
+  // Expected obj:
+  // {
+  //   server: { host: '0.0.0.0', port: 3333 }, // UDP IN (from TouchOSC)
+  //   client: { host: '127.0.0.1', port: 3334 } // UDP OUT (to Processing/etc.)
+  // }
+  socket.on('config', (obj = {}) => {
     try {
-      isConnected = true
+      const serverHost = obj?.server?.host || DEFAULT_OSC_SERVER_HOST
+      const serverPort = Number(obj?.server?.port || DEFAULT_OSC_SERVER_PORT)
+      const clientHost = obj?.client?.host || DEFAULT_OSC_CLIENT_HOST
+      const clientPort = Number(obj?.client?.port || DEFAULT_OSC_CLIENT_PORT)
 
-      // Windows tip: prefer 127.0.0.1 instead of ::1 to avoid IPv6/IPv4 issues
-      const serverHost = obj?.server?.host || '127.0.0.1'
-      const serverPort = obj?.server?.port || 3333
-      const clientHost = obj?.client?.host || '127.0.0.1'
-      const clientPort = obj?.client?.port || 3334
+      // Tip for Windows: prefer IPv4 explicit hostnames/IPs
+      setupOsc(serverHost, serverPort, clientHost, clientPort)
 
-      // Kill previous OSC servers/clients if reconfiguring or restarting
-      if (oscServer)
-        try {
-          oscServer.kill()
-        } catch {}
-      if (oscClient)
-        try {
-          oscClient.kill()
-        } catch {}
-
-      // Create a new OSC server (receiving) and client (sending)
-      oscServer = new osc.Server(serverPort, serverHost)
-      oscClient = new osc.Client(clientHost, clientPort)
-
-      console.log(`🎛️  OSC Server listening on ${serverHost}:${serverPort}`)
-      console.log(`📤 OSC Client sending to   ${clientHost}:${clientPort}`)
-
-      // In Socket.IO v4 we use socket.id instead of socket.sessionId
-      oscClient.send('/status', `${socket.id} connected`)
-
-      // Forward any incoming OSC messages to the browser
-      oscServer.on('message', (msg, rinfo) => {
-        socket.emit('message', msg)
-        // Uncomment the line below for verbose logging during debugging:
-        // console.log('OSC in:', msg, 'from', `${rinfo.address}:${rinfo.port}`);
-      })
-
-      // Confirm that connection and configuration succeeded
+      // Let the client know it's good to go
       socket.emit('connected', 1)
+
+      // Also send a small OSC status to the OUT target (optional)
+      try {
+        oscClient && oscClient.send('/status', `${socket.id} connected`)
+      } catch (e) {
+        console.warn('⚠️  Could not send /status to OSC client:', e.message)
+      }
     } catch (e) {
-      console.error('⚠️ error in config:', e)
+      console.error('⚠️  Error in config:', e)
       socket.emit('connected', 0)
     }
   })
 
-  // Forward messages from the browser to the OSC client
-  socket.on('message', (obj) => {
-    // Expected format: ['/osc/address', arg1, arg2, ...]
-    if (oscClient) {
-      try {
-        oscClient.send.apply(oscClient, obj)
-      } catch (e) {
-        console.error('⚠️ error sending OSC:', e)
-      }
+  // Web → OSC (generic)
+  // Expected: ['/address', arg1, arg2, ...]
+  socket.on('message', (arr) => {
+    if (!oscClient || !Array.isArray(arr) || arr.length === 0) return
+    try {
+      if (VERBOSE_OSC) console.log('📤 OSC OUT (message):', prettyOsc(arr))
+      oscClient.send.apply(oscClient, arr)
+    } catch (e) {
+      console.error('⚠️  Error sending OSC (message):', e.message)
     }
   })
 
-  // Web → OSC (p5 send to Processing via bridge)
+  // Web → OSC (explicit event name)
   socket.on('osc-send', (arr) => {
-    // arr esperado: ['/ruta', arg1, arg2, ...]
-    if (oscClient && Array.isArray(arr) && arr.length) {
-      try {
-        oscClient.send.apply(oscClient, arr)
-      } catch (e) {
-        console.error('⚠️ error sending OSC:', e)
-      }
+    if (!oscClient || !Array.isArray(arr) || arr.length === 0) return
+    try {
+      if (VERBOSE_OSC) console.log('📤 OSC OUT (osc-send):', prettyOsc(arr))
+      oscClient.send.apply(oscClient, arr)
+    } catch (e) {
+      console.error('⚠️  Error sending OSC (osc-send):', e.message)
     }
   })
 
-  // Clean up on disconnect
   socket.on('disconnect', () => {
     console.log('❌ Web client disconnected:', socket.id)
-    if (isConnected) {
+    // We keep OSC endpoints alive because other web clients might still be connected.
+    // If you want to tear them down when NO clients remain:
+    if (io.engine.clientsCount === 0) {
       try {
         oscServer && oscServer.kill()
       } catch {}
@@ -114,7 +206,36 @@ io.on('connection', (socket) => {
       } catch {}
       oscServer = null
       oscClient = null
-      isConnected = false
+      // Recreate with defaults so the next client finds a working bridge
+      setupOsc(
+        DEFAULT_OSC_SERVER_HOST,
+        DEFAULT_OSC_SERVER_PORT,
+        DEFAULT_OSC_CLIENT_HOST,
+        DEFAULT_OSC_CLIENT_PORT
+      )
     }
   })
 })
+
+// ---------------------------
+// Graceful shutdown (Ctrl+C / kill)
+// ---------------------------
+function shutdown(reason = 'shutdown') {
+  console.log(`\n🛑 Graceful ${reason}…`)
+  try {
+    oscServer && oscServer.kill()
+  } catch {}
+  try {
+    oscClient && oscClient.kill()
+  } catch {}
+  try {
+    io && io.close()
+  } catch {}
+  try {
+    httpServer && httpServer.close()
+  } catch {}
+  setTimeout(() => process.exit(0), 200)
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'))
+process.on('SIGTERM', () => shutdown('SIGTERM'))
