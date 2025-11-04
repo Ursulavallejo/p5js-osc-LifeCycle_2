@@ -1,7 +1,8 @@
 // bridge.js (v4 friendly, Windows-friendly)
-// This version updates the original bridge for Socket.IO v4 compatibility,
-// adds local IP discovery, clearer logging, better error handling,
-// and Windows-friendly defaults (IPv4 + 0.0.0.0 binding).
+// Socket.IO v4 compatible OSC <-> WebSocket bridge.
+// - Local IP discovery with Windows-friendly heuristics (prefers Wi-Fi).
+// - Clear logs, better error handling, and graceful shutdown.
+// - Binds UDP server on 0.0.0.0 so TouchOSC on LAN can reach it.
 
 // ---------------------------
 // Imports
@@ -15,27 +16,60 @@ const os = require('os')
 // Config (env overridable)
 // ---------------------------
 const WS_PORT = Number(process.env.PORT || 8081)
-const DEFAULT_OSC_SERVER_HOST = process.env.OSC_SERVER_HOST || '0.0.0.0' // receive (from TouchOSC)
+const DEFAULT_OSC_SERVER_HOST = process.env.OSC_SERVER_HOST || '0.0.0.0' // UDP IN (from TouchOSC)
 const DEFAULT_OSC_SERVER_PORT = Number(process.env.OSC_SERVER_PORT || 3333)
-const DEFAULT_OSC_CLIENT_HOST = process.env.OSC_CLIENT_HOST || '127.0.0.1' // send (to Processing/DAW/etc.)
+const DEFAULT_OSC_CLIENT_HOST = process.env.OSC_CLIENT_HOST || '127.0.0.1' // UDP OUT (to Processing/DAW/etc.)
 const DEFAULT_OSC_CLIENT_PORT = Number(process.env.OSC_CLIENT_PORT || 3334)
 
 // Optional: very-verbose OSC logging (set VERBOSE_OSC=1)
 const VERBOSE_OSC = process.env.VERBOSE_OSC === '1'
 
 // ---------------------------
-// Helpers
+// Helpers (improved Windows pick)
 // ---------------------------
-function getLocalIPv4() {
+function listIPv4Interfaces() {
   const nics = os.networkInterfaces()
+  const out = []
   for (const name of Object.keys(nics)) {
     for (const iface of nics[name]) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address
+        out.push({ name, address: iface.address })
       }
     }
   }
-  return null
+  return out
+}
+
+function pickBestLocalIP() {
+  // 1) Manual override via env (highest priority)
+  if (process.env.LOCAL_IP)
+    return { address: process.env.LOCAL_IP, source: 'env:LOCAL_IP' }
+  if (process.env.LOCAL_IFACE) {
+    const chosen = listIPv4Interfaces().find(
+      (i) => i.name.toLowerCase() === process.env.LOCAL_IFACE.toLowerCase()
+    )
+    if (chosen)
+      return { ...chosen, source: `env:LOCAL_IFACE=${process.env.LOCAL_IFACE}` }
+  }
+
+  // 2) Heuristics: prefer Wi-Fi / WLAN / Wireless names on Windows
+  const all = listIPv4Interfaces()
+  const byWifiName = all.find((i) => /(wi-?fi|wlan|wireless)/i.test(i.name))
+  if (byWifiName) return { ...byWifiName, source: 'heuristic:wifi-name' }
+
+  // 3) Prefer common LAN ranges (192.168.x.x > 10.x.x.x > 172.16–31.x.x)
+  const prefer = (regex) => all.find((i) => regex.test(i.address))
+  const r192 = prefer(/^192\.168\./)
+  if (r192) return { ...r192, source: 'heuristic:192.168' }
+  const r10 = prefer(/^10\./)
+  if (r10) return { ...r10, source: 'heuristic:10.x' }
+  const r172 = all.find((i) => /^172\.(1[6-9]|2\d|3[0-1])\./.test(i.address))
+  if (r172) return { ...r172, source: 'heuristic:172.16-31' }
+
+  // 4) Fallback: first non-internal IPv4 (may be a virtual adapter)
+  return all[0]
+    ? { ...all[0], source: 'fallback:first' }
+    : { address: null, source: 'none' }
 }
 
 // Pretty print an OSC array (node-osc format)
@@ -69,10 +103,23 @@ const io = new Server(httpServer, {
 })
 
 httpServer.listen(WS_PORT, () => {
-  const ip = getLocalIPv4()
+  const all = listIPv4Interfaces()
+  const picked = pickBestLocalIP()
+
   console.log('──────────────────────────────────────────────')
-  console.log(`🖥️  Local IP: ${ip || 'Unavailable'}`)
-  console.log(`👉 Use this IP in TouchOSC → Host: ${ip || 'check ipconfig'}`)
+  console.log('📡 Available IPv4 interfaces:')
+  if (all.length === 0) {
+    console.log('  (none found)')
+  } else {
+    for (const i of all) console.log(`  • ${i.name.padEnd(24)} ${i.address}`)
+  }
+  console.log('──────────────────────────────────────────────')
+  console.log(
+    `🖥️  Chosen IP: ${picked.address || 'Unavailable'}  (${picked.source})`
+  )
+  console.log(
+    `👉 Use this IP in TouchOSC → Host: ${picked.address || 'check ipconfig'}`
+  )
   console.log(`🔌 Socket.IO listening on http://0.0.0.0:${WS_PORT}`)
   console.log('──────────────────────────────────────────────')
 })
@@ -152,7 +199,7 @@ io.on('connection', (socket) => {
       const clientHost = obj?.client?.host || DEFAULT_OSC_CLIENT_HOST
       const clientPort = Number(obj?.client?.port || DEFAULT_OSC_CLIENT_PORT)
 
-      // Tip for Windows: prefer IPv4 explicit hostnames/IPs
+      // Tip for Windows: prefer explicit IPv4 hostnames/IPs
       setupOsc(serverHost, serverPort, clientHost, clientPort)
 
       // Let the client know it's good to go
@@ -195,8 +242,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     console.log('❌ Web client disconnected:', socket.id)
-    // We keep OSC endpoints alive because other web clients might still be connected.
-    // If you want to tear them down when NO clients remain:
+    // Keep OSC endpoints alive; tear down only if NO clients remain:
     if (io.engine.clientsCount === 0) {
       try {
         oscServer && oscServer.kill()
@@ -206,7 +252,7 @@ io.on('connection', (socket) => {
       } catch {}
       oscServer = null
       oscClient = null
-      // Recreate with defaults so the next client finds a working bridge
+      // Recreate defaults so the next client finds a working bridge
       setupOsc(
         DEFAULT_OSC_SERVER_HOST,
         DEFAULT_OSC_SERVER_PORT,
