@@ -319,3 +319,26 @@ function __intro_makeSoftCircleG(size = 128) {
 function __easeOutCubic(x) {
   return 1 - Math.pow(1 - x, 3)
 }
+
+// Permite reiniciar la intro desde fuera (p.ej. con un toggle OSC)
+function Intro_reset() {
+  __intro_state.t = 0
+  __intro_state.phase = 0
+  // re-centrar por si cambió el viewport
+  __intro_state.center = createVector(width * 0.5, height * 0.62)
+  // recrear el emisor y limpiar partículas (evita “humo viejo”)
+  __intro_state.emitter = new __Emitter(
+    __intro_state.center.x,
+    __intro_state.center.y,
+    __intro_state.img
+  )
+}
+
+// Salta la intro y vuelve al sketch de inmediato
+function Intro_skip() {
+  __intro_state.phase = 2
+  __intro_state.t = 0
+  if (__intro_state.emitter && __intro_state.emitter.particles) {
+    __intro_state.emitter.particles.length = 0
+  }
+}

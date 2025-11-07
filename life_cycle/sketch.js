@@ -64,10 +64,8 @@ function setup() {
     if (addr === '/2/multitoggle/1/1') {
       showIntro = val === 1
       if (showIntro) {
-        // Reinicia el intro para que empiece desde el fade-in
         if (typeof Intro_reset === 'function') Intro_reset()
       } else {
-        // Si lo apagas a mitad, saltar al final para volver a la escena
         if (typeof Intro_skip === 'function') Intro_skip()
       }
     }
@@ -106,7 +104,7 @@ function setup() {
 
   // Initialize intro (you can pass a texture path or let it auto-generate one)
   Intro_init({
-    imgPath: './assets/texture.png', // o quita esta línea para usar textura generada
+    imgPath: './assets/texture.png',
     yQuoteFrac: 0.55, // texto un poco más abajo
     yAuthorFrac: 0.8,
     fadeSec: 3.5,
@@ -125,7 +123,7 @@ function draw() {
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
     Intro_updateAndDraw(deltaTime / 1000)
-    return // while intro is active, skip the rest of the scene
+    return
   }
 
   // --- Background: rotating molecular nest ---
