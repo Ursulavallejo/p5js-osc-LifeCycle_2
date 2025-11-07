@@ -13,8 +13,10 @@ let btnA = 0,
   btnC = 0
 // toggle state to show/hide the atoms (controlled by /1/toggle2)
 // Convention: 1 → show, 0 → hide
+let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
-let showAtomsNestBackground = true
+let showAtomsNestBackground = false
+let showCoreEnergy = false
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -25,12 +27,19 @@ const ALPHA = 0.25
 let particles = []
 let puffT = 0
 
+//Intro
+let img
+
+function preload() {
+  img = loadImage('./assets/texture.png')
+}
+
 function setup() {
   createCanvas(windowWidth, windowHeight)
   pixelDensity(1)
   noStroke()
   textAlign(CENTER, CENTER)
-  textSize(16)
+  textSize(18)
   fill(255)
 
   // Connect to local bridge
@@ -51,20 +60,32 @@ function setup() {
     const [addr, valRaw] = msg
     const val = Number(valRaw)
 
-    // Faders (Beatmachine Mk2 typical addresses)
-    if (addr === '/1/fader1') fader1 = constrain(val, 0, 1)
-    if (
-      addr === '/1/fader2' || // common
-      addr === '/1/slider2' || // some templates
-      addr === '/fader2' // fallback alias
-    ) {
-      fader2 = constrain(val, 0, 1)
+    // Intro ON/OFF desde TouchOSC (1 = ON, 0 = OFF)
+    if (addr === '/2/multitoggle/1/1') {
+      showIntro = val === 1
+      if (showIntro) {
+        // Reinicia el intro para que empiece desde el fade-in
+        if (typeof Intro_reset === 'function') Intro_reset()
+      } else {
+        // Si lo apagas a mitad, saltar al final para volver a la escena
+        if (typeof Intro_skip === 'function') Intro_skip()
+      }
     }
 
-    // Buttons A / B / C (you already confirmed these in console)
-    if (addr === '/1/push12') btnA = val
-    if (addr === '/1/push11') btnB = val
-    if (addr === '/1/push10') btnC = val
+    //  {  while (!Intro_isDone()) Intro_updateAndDraw(999) // avanzar a done
+    // }
+
+    // Faders
+
+    // fader CoreEnergy
+    if (addr === '/2/multifader/2') fader1 = constrain(val, 0, 1)
+    // atoms movement
+    if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
+
+    // Handle  A / B / C  Toogle change color CoreEnergy
+    if (addr === '/2/multitoggle/3/2') btnA = val
+    if (addr === '/2/multitoggle/4/2') btnB = val
+    if (addr === '/2/multitoggle/5/2') btnC = val
 
     // Small puff when 1 is pressed
     if (addr === '/group7/push1' && val === 1) {
@@ -72,11 +93,25 @@ function setup() {
       puffT = 0
     }
 
-    // Toogle show/hide Atoms
-    if (addr === '/1/toggle2') showAtoms = val === 1 // hide when 0, show when 1
+    // Toogles show/hide Atoms and atomNetBackground
+    // hide when 0, show when 1
+
+    if (addr === '/2/multitoggle/1/2') showCoreEnergy = val === 1 //CoreEnergy
+    if (addr === '/2/multitoggle/1/3') showAtomsNestBackground = val === 1 //atomNetBackground
+    if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
 
     // Debug log
     // console.log('OSC →', addr, val)
+  })
+
+  // Initialize intro (you can pass a texture path or let it auto-generate one)
+  Intro_init({
+    imgPath: './assets/texture.png', // o quita esta línea para usar textura generada
+    yQuoteFrac: 0.55, // texto un poco más abajo
+    yAuthorFrac: 0.8,
+    fadeSec: 3.5,
+    holdSec: 2.0,
+    smokeSec: 6.0, // pon 0 o negativo para humo infinito
   })
 }
 
@@ -87,20 +122,29 @@ function draw() {
   s1 += (fader1 - s1) * ALPHA
   s2 += (fader2 - s2) * ALPHA
 
+  // --- INTRO FIRST ---
+  if (!Intro_isDone() && showIntro) {
+    Intro_updateAndDraw(deltaTime / 1000)
+    return // while intro is active, skip the rest of the scene
+  }
+
   // --- Background: rotating molecular nest ---
-  drawMolecularNestBackground(frameCount * 0.002)
+  if (showAtomsNestBackground) {
+    drawMolecularNestBackground(frameCount * 0.002)
+  }
 
   // --- Core (blue circle) driven by fader1 ---
-  let coreR = map(s1, 0, 1, 50, 300)
+  if (showCoreEnergy) {
+    let coreR = map(s1, 0, 1, 50, 300)
+    // Color override via buttons (momentary)
+    let col = color(100, 200, 255) // default blue
+    if (btnA) col = color(255, 80, 80) // red
+    if (btnB) col = color(80, 255, 120) // green
+    if (btnC) col = color(255, 255, 100) // yellow
 
-  // Color override via buttons (momentary)
-  let col = color(100, 200, 255) // default blue
-  if (btnA) col = color(255, 80, 80) // red
-  if (btnB) col = color(80, 255, 120) // green
-  if (btnC) col = color(255, 255, 100) // yellow
-
-  fill(col)
-  ellipse(width / 2, height / 2, coreR)
+    fill(col)
+    ellipse(width / 2, height / 2, coreR)
+  }
 
   // --- Atoms driven by fader2 (openness 0..1) ---
   if (showAtoms) {
