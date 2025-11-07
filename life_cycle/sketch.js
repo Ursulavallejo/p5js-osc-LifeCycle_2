@@ -30,10 +30,6 @@ let puffT = 0
 //Intro
 let img
 
-function preload() {
-  img = loadImage('./assets/texture.png')
-}
-
 function setup() {
   createCanvas(windowWidth, windowHeight)
   pixelDensity(1)
@@ -86,7 +82,7 @@ function setup() {
     if (addr === '/2/multitoggle/5/2') btnC = val
 
     // Small puff when 1 is pressed
-    if (addr === '/2/multitoggle/1/5' && val === 1) {
+    if (addr === '/2/led1' && val === 1) {
       particles = makeParticles(320)
       puffT = 0
     }
@@ -104,12 +100,11 @@ function setup() {
 
   // Initialize intro (you can pass a texture path or let it auto-generate one)
   Intro_init({
-    imgPath: './assets/texture.png',
-    yQuoteFrac: 0.55, // texto un poco más abajo
-    yAuthorFrac: 0.8,
+    fontPath: './assets/MomoTrustDisplay.ttf',
+    // yQuoteFrac: 0.55, // texto un poco más abajo
+    // yAuthorFrac: 0.8,
     fadeSec: 3.5,
     holdSec: 2.0,
-    smokeSec: 6.0, // pon 0 o negativo para humo infinito
   })
 }
 
@@ -123,14 +118,19 @@ function draw() {
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
     Intro_updateAndDraw(deltaTime / 1000)
-    return
+    // return
   }
 
   // --- Background: rotating molecular nest ---
   if (showAtomsNestBackground) {
     drawMolecularNestBackground(frameCount * 0.002)
   }
-
+  // --- Optional puff particles when '/2/led1' is tapped ---
+  if (particles.length) {
+    puffT += deltaTime / 1000
+    drawPuff(puffT)
+    if (puffT > 1.5) particles = []
+  }
   // --- Core (blue circle) driven by fader1 ---
   if (showCoreEnergy) {
     let coreR = map(s1, 0, 1, 50, 300)
@@ -148,25 +148,21 @@ function draw() {
   if (showAtoms) {
     drawAtomsAtCenter(s2, frameCount * 0.02)
   }
-  // --- Optional puff particles when A is tapped ---
-  if (particles.length) {
-    puffT += deltaTime / 1000
-    drawPuff(puffT)
-    if (puffT > 1.5) particles = []
-  }
 
   // HUD
   fill(255)
   noStroke()
-  text(
-    `fader1(core): ${nf(fader1, 1, 2)}   fader2(flower): ${nf(
-      fader2,
-      1,
-      2
-    )}   A:${btnA} B:${btnB} C:${btnC}`,
-    width / 2,
-    height - 28
-  )
+
+  //DEBUG >>>
+  // text(
+  //   `fader1(core): ${nf(fader1, 1, 2)}   fader2(flower): ${nf(
+  //     fader2,
+  //     1,
+  //     2
+  //   )}   A:${btnA} B:${btnB} C:${btnC}`,
+  //   width / 2,
+  //   height - 28
+  // )
 }
 
 function windowResized() {

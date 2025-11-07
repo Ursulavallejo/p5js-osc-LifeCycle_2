@@ -1,344 +1,250 @@
-// intro.js
-// Intro module for p5.js:
-// 1) Sagan quote fade-in over a soft radial gradient.
-// 2) Smoke particle effect with texture (or procedural fallback).
-// 3) Public API:
-//    Intro_init({ imgPath, fontPath, fadeSec, holdSec, smokeSec })
-//    Intro_updateAndDraw(dtSeconds)
-//    Intro_isDone()
+// intro.js — posiciones sincronizadas (texto y partículas idénticos)
 
+// -------------------- Estado --------------------
 let __intro_state = {
-  baseBG: 30, // gris del sketch
-  gradientStrength: 0.35, // 0.0..1.0 cuanto oscurece el centro
-  phase: 0, // 0: fade-in text, 1: smoke, 2: done
-  t: 0, // phase time (seconds)
+  baseBG: 30,
+  phase: 0, // 0: fade texto, 1: partículas, 2: done
+  t: 0,
   fadeSec: 3.5,
   holdSec: 2.0,
-  smokeSec: 0, // 6.0,<= 0 to run indefinitely
+
   quote:
     '“The nitrogen in our DNA, the calcium in our teeth, the iron in our blood — were made in the interiors of collapsing stars. We are made of star-stuff.”',
   author: '— Carl Sagan',
 
-  // assets
-  img: null, // smoke texture
-  font: null, // custom font (optional)
-
-  // smoke
-  emitter: null,
-  center: null,
-
-  // layout
-  yQuoteFrac: 0.52, // vertical anchor (0..1) for quote block (a bit below center)
+  yQuoteFrac: 0.52,
   yAuthorFrac: 0.78,
-
-  readyImg: false,
-  readyFont: true, // default true (only set false if a font is loading)
-  baseBG: 30, // base background so color matches your main scene
 }
 
-// -------------------- Public API --------------------
+// efecto disolver
+const __intro_dissolve = { k0: 18, tau: 1.0, jitter: 0.6 }
+
+// partículas
+let __intro_pix = []
+
+// -------------------- API --------------------
 function Intro_init(opts = {}) {
   __intro_state.fadeSec = opts.fadeSec ?? __intro_state.fadeSec
   __intro_state.holdSec = opts.holdSec ?? __intro_state.holdSec
-  __intro_state.smokeSec = opts.smokeSec ?? __intro_state.smokeSec
-
-  // Optional overrides
   if (typeof opts.yQuoteFrac === 'number')
     __intro_state.yQuoteFrac = opts.yQuoteFrac
   if (typeof opts.yAuthorFrac === 'number')
     __intro_state.yAuthorFrac = opts.yAuthorFrac
-
   __intro_state.t = 0
   __intro_state.phase = 0
-  __intro_state.center = createVector(width * 0.5, height * 0.62)
-  if (typeof opts.baseBG === 'number') __intro_state.baseBG = opts.baseBG
-  if (typeof opts.gradientStrength === 'number')
-    __intro_state.gradientStrength = opts.gradientStrength
-
-  // Load smoke texture or create fallback
-  __intro_state.readyImg = false
-  if (opts.imgPath) {
-    __intro_state.img = loadImage(
-      opts.imgPath,
-      () => {
-        __intro_state.readyImg = true
-      },
-      () => {
-        __intro_state.img = __intro_makeSoftCircleG(128)
-        __intro_state.readyImg = true
-      }
-    )
-  } else {
-    __intro_state.img = __intro_makeSoftCircleG(128)
-    __intro_state.readyImg = true
-  }
-
-  // Load custom font (optional)
-  if (opts.fontPath) {
-    __intro_state.readyFont = false
-    __intro_state.font = loadFont(
-      opts.fontPath,
-      () => {
-        __intro_state.readyFont = true
-      },
-      () => {
-        __intro_state.font = null
-        __intro_state.readyFont = true
-      }
-    )
-  } else {
-    __intro_state.font = null
-    __intro_state.readyFont = true
-  }
-
-  // Build emitter
-  __intro_state.emitter = new __Emitter(
-    __intro_state.center.x,
-    __intro_state.center.y,
-    __intro_state.img
-  )
+  __intro_pix = []
 }
 
-function Intro_updateAndDraw(dtSeconds) {
-  if (!(__intro_state.readyImg && __intro_state.readyFont)) return false
-
-  __intro_state.t += dtSeconds
+function Intro_updateAndDraw(dt) {
+  __intro_state.t += dt
+  push()
+  resetMatrix()
+  background(__intro_state.baseBG)
 
   if (__intro_state.phase === 0) {
-    // Match your scene background to avoid color jump:
-    background(__intro_state.baseBG)
-    // __intro_drawGradient(__intro_state.gradientStrength) // ← quitado: sin gradiente de fondo
     __intro_drawQuoteFade()
     if (__intro_state.t >= __intro_state.fadeSec + __intro_state.holdSec) {
+      const pts = __intro_bakePointsFromText()
+      __intro_pix = pts.map((p) => new __Pix(p.x, p.y))
       __intro_state.phase = 1
       __intro_state.t = 0
     }
+    pop()
     return false
   }
 
   if (__intro_state.phase === 1) {
-    background(__intro_state.baseBG)
-    // __intro_drawGradient(__intro_state.gradientStrength * 0.6) // ← quitado: sin gradiente de fondo
-    __intro_runSmoke(dtSeconds)
-    if (
-      __intro_state.smokeSec > 0 &&
-      __intro_state.t >= __intro_state.smokeSec
-    ) {
-      __intro_state.phase = 2
-      __intro_state.t = 0
-    }
+    __intro_runPix(dt)
+    pop()
     return false
   }
 
-  return true // done
+  pop()
+  return true
 }
 
 function Intro_isDone() {
   return __intro_state.phase === 2
 }
-
-// -------------------- Internals: Quote & Gradient --------------------
-function __intro_drawGradient(strength = 1.0) {
-  // Soft radial darkening (drawn on top of base background)
-  // NOT USED (gradientes desactivados)
-  push()
-  noStroke()
-  const cx = width * 0.5,
-    cy = height * 0.5
-  const maxR = sqrt(sq(width) + sq(height)) * 0.6
-  for (let r = maxR; r > 0; r -= 8) {
-    const a = map(r, 0, maxR, 120, 15) * strength
-    fill(0, 0, 0, a)
-    circle(cx, cy, r * 2)
-  }
-  pop()
+function Intro_reset() {
+  __intro_state.t = 0
+  __intro_state.phase = 0
+  __intro_pix = []
+}
+function Intro_skip() {
+  __intro_state.phase = 2
+  __intro_state.t = 0
+  __intro_pix = []
 }
 
+// -------------------- Texto (fase 0) --------------------
 function __intro_drawQuoteFade() {
-  // Alpha for quote
   const fadeIn = __intro_state.fadeSec
   const t = __intro_state.t
-  let alpha =
+  const alpha =
     t <= fadeIn ? __easeOutCubic(constrain(t / fadeIn, 0, 1)) * 255 : 255
+  const L = __intro_layout()
 
   push()
-  textAlign(CENTER, CENTER)
+  textFont('MomoTrustDisplay')
+  textAlign(LEFT, TOP) // <— IGUAL que en el bake
 
-  // Use custom font if present (modern wide look)
-  if (__intro_state.font) {
-    textFont(__intro_state.font)
-  } else {
-    textFont('MomoTrustDisplay') // CSS @font-face fallback
-  }
-
-  // Block sizes
-  const margin = min(width, height) * 0.08
-  const boxW = width - margin * 2
-  const boxH = height * 0.62
-
-  // Center box horizontally and vertically (using fractions)
-  const boxX = (width - boxW) / 2
-  const boxYQuote = height * __intro_state.yQuoteFrac - boxH / 2
-  const boxYAuthor = height * __intro_state.yAuthorFrac - (boxH * 0.25) / 2
-
-  // Quote
+  // Cita
   const quoteSize = __intro_pickTextSize(false)
   textSize(quoteSize)
   textLeading(quoteSize * 1.12)
-
-  // Subtle glow layers (mantiene tu look sin gradiente de relleno)
-  const glowRepeats = 3
-  for (let i = glowRepeats; i > 0; i--) {
-    const a = alpha * 0.16 * (i / glowRepeats)
-    fill(255, a)
+  for (let i = 3; i > 0; i--) {
+    // glow sutil
+    fill(255, alpha * 0.16 * (i / 3))
     noStroke()
-    text(__intro_state.quote, boxX, boxYQuote, boxW, boxH)
+    text(__intro_state.quote, L.boxX, L.boxYQuote, L.boxW, L.boxH)
   }
-
-  // Main text (blanco puro con fade)
   fill(255, alpha)
   noStroke()
-  text(__intro_state.quote, boxX, boxYQuote, boxW, boxH)
+  text(__intro_state.quote, L.boxX, L.boxYQuote, L.boxW, L.boxH)
 
-  // Author (smaller)
+  // Autor
   const authorSize = __intro_pickTextSize(true)
   textSize(authorSize)
   fill(255, alpha)
-  text(__intro_state.author, boxX, boxYAuthor, boxW, boxH * 0.25)
-
+  text(__intro_state.author, L.boxX, L.boxYAuthor, L.boxW, L.boxH * 0.25)
   pop()
+}
+
+// -------------------- Layout --------------------
+function __intro_layout() {
+  const margin = min(width, height) * 0.08
+  const boxW = Math.round(width - margin * 2)
+  const boxH = Math.round(height * 0.62)
+  const boxX = Math.round((width - boxW) / 2)
+  const boxYQuote = Math.round(height * __intro_state.yQuoteFrac - boxH / 2)
+  const boxYAuthor = Math.round(
+    height * __intro_state.yAuthorFrac - (boxH * 0.25) / 2
+  )
+  return { boxX, boxW, boxH, boxYQuote, boxYAuthor }
+}
+
+// -------------------- Bake de puntos (cita y autor por separado) --------------------
+function __intro_bakePointsFromText() {
+  const L = __intro_layout()
+  const authorH = Math.round(L.boxH * 0.25)
+  const pts = []
+
+  // --- CITA ---
+  const gQ = createGraphics(L.boxW, L.boxH)
+  gQ.pixelDensity(1)
+  gQ.background(0)
+  gQ.fill(255)
+  gQ.noStroke()
+  gQ.textFont('MomoTrustDisplay')
+  gQ.textAlign(LEFT, TOP) // <— IGUAL
+  const qSize = __intro_pickTextSize(false)
+  gQ.textSize(qSize)
+  gQ.textLeading(qSize * 1.12)
+  gQ.text(__intro_state.quote, 0, 0, L.boxW, L.boxH)
+  gQ.loadPixels()
+  const step = 4
+  for (let y = 0; y < gQ.height; y += step) {
+    for (let x = 0; x < gQ.width; x += step) {
+      const idx = (y * gQ.width + x) * 4
+      if (gQ.pixels[idx] > 200) {
+        pts.push({
+          x: L.boxX + x + random(-0.3, 0.3),
+          y: L.boxYQuote + y + random(-0.3, 0.3),
+        })
+      }
+    }
+  }
+
+  // --- AUTOR ---
+  const gA = createGraphics(L.boxW, authorH)
+  gA.pixelDensity(1)
+  gA.background(0)
+  gA.fill(255)
+  gA.noStroke()
+  gA.textFont('MomoTrustDisplay')
+  gA.textAlign(LEFT, TOP) // <— IGUAL
+  const aSize = __intro_pickTextSize(true)
+  gA.textSize(aSize)
+  gA.text(__intro_state.author, 0, 0, L.boxW, authorH)
+  gA.loadPixels()
+  for (let y = 0; y < gA.height; y += step) {
+    for (let x = 0; x < gA.width; x += step) {
+      const idx = (y * gA.width + x) * 4
+      if (gA.pixels[idx] > 200) {
+        pts.push({
+          x: L.boxX + x + random(-0.3, 0.3),
+          y: L.boxYAuthor + y + random(-0.3, 0.3),
+        })
+      }
+    }
+  }
+
+  return pts
 }
 
 function __intro_pickTextSize(isAuthor = false) {
   const base = min(width, height)
-  // Slightly larger than before for a bold, modern presence
   return isAuthor ? max(16, base * 0.03) : max(18, base * 0.042)
 }
 
-// -------------------- Internals: Smoke --------------------
-function __intro_runSmoke(dt) {
-  // gentle wind over time
-  const dx = map(sin(frameCount * 0.01), -1, 1, -0.1, 0.1)
-  const wind = createVector(dx, 0)
-
-  // more particles so it's clearly visible
-  for (let i = 0; i < 2; i++) __intro_state.emitter.addParticle()
-
-  __intro_state.emitter.applyForce(wind)
-  __intro_state.emitter.run()
-
-  // optional tiny caption
-  // push(); fill(255, 90); textAlign(CENTER, CENTER); textSize(14);
-  // text('star-stuff', width/2, height*0.12); pop();
-}
-
-// -------------------- Particle System --------------------
-class __Particle {
-  constructor(x, y, img) {
+// -------------------- Partículas (fase 1) --------------------
+class __Pix {
+  constructor(x, y) {
+    this.home = createVector(x, y)
     this.pos = createVector(x, y)
-    this.vel = createVector(random(-0.35, 0.35), random(-1.2, -0.3))
-    this.acc = createVector(0, 0)
-    this.lifespan = random(1200, 1800) // ms
-    this.age = 0
-    this.img = img
-    this.size = random(26, 52)
-    this.spin = random(-0.018, 0.018)
-    this.theta = random(TWO_PI)
+    this.vel = createVector(random(-0.05, 0.05), random(-0.05, 0.05))
+    this.size = random(2.2, 3.6)
   }
-  applyForce(f) {
-    this.acc.add(f)
-  }
-  update(dt) {
-    this.vel.add(this.acc)
+  step(dt, k) {
+    const toHome = p5.Vector.sub(this.home, this.pos).mult(k * dt)
+    this.vel.add(toHome)
+    this.vel.x +=
+      __intro_dissolve.jitter *
+      (noise(this.pos.y * 0.003, frameCount * 0.003) - 0.5) *
+      dt
+    this.vel.y +=
+      __intro_dissolve.jitter *
+      (noise(this.pos.x * 0.003, frameCount * 0.003) - 0.5) *
+      dt
+    this.vel.limit(1.2)
     this.pos.add(this.vel)
-    this.acc.mult(0)
-    this.theta += this.spin
-    this.age += dt * 1000
+    const m = 6
+    if (this.pos.x < m) {
+      this.pos.x = m
+      this.vel.x *= -1
+    }
+    if (this.pos.x > width - m) {
+      this.pos.x = width - m
+      this.vel.x *= -1
+    }
+    if (this.pos.y < m) {
+      this.pos.y = m
+      this.vel.y *= -1
+    }
+    if (this.pos.y > height - m) {
+      this.pos.y = height - m
+      this.vel.y *= -1
+    }
   }
-  isDead() {
-    return this.age >= this.lifespan
-  }
-  display() {
-    const k = 1 - this.age / this.lifespan // 1..0
-    const a = 220 * pow(constrain(k, 0, 1), 1.6)
-    push()
-    translate(this.pos.x, this.pos.y)
-    rotate(this.theta)
-    tint(255, a)
-    imageMode(CENTER)
-    image(this.img, 0, 0, this.size, this.size)
-    pop()
+  draw() {
+    noStroke()
+    fill(255, 230)
+    circle(this.pos.x, this.pos.y, this.size)
   }
 }
 
-class __Emitter {
-  constructor(x, y, img) {
-    this.origin = createVector(x, y)
-    this.img = img
-    this.particles = []
-    this.gravity = createVector(0, -0.0045) // slight upward pull
-  }
-  applyForce(f) {
-    for (const p of this.particles) p.applyForce(f)
-  }
-  addParticle() {
-    this.particles.push(
-      new __Particle(
-        this.origin.x + random(-8, 8),
-        this.origin.y + random(-8, 8),
-        this.img
-      )
-    )
-  }
-  run() {
-    for (const p of this.particles) p.applyForce(this.gravity)
-    for (let i = this.particles.length - 1; i >= 0; i--) {
-      const p = this.particles[i]
-      p.update(deltaTime / 1000)
-      p.display()
-      if (p.isDead()) this.particles.splice(i, 1)
-    }
+function __intro_runPix(dt) {
+  if (!__intro_pix.length) return
+  const t = __intro_state.t
+  const k = __intro_dissolve.k0 * Math.exp(-t / __intro_dissolve.tau)
+  for (const p of __intro_pix) {
+    p.step(dt, k)
+    p.draw()
   }
 }
 
 // -------------------- Helpers --------------------
-function __intro_makeSoftCircleG(size = 128) {
-  const g = createGraphics(size, size)
-  g.clear()
-  g.noStroke()
-  // Gaussian-like radial alpha
-  for (let r = size * 0.5; r > 0; r--) {
-    const k = r / (size * 0.5)
-    const a = 255 * pow(1 - k, 1.8)
-    g.fill(255, a)
-    g.circle(size / 2, size / 2, r * 2)
-  }
-  return g
-}
-
 function __easeOutCubic(x) {
   return 1 - Math.pow(1 - x, 3)
-}
-
-// Permite reiniciar la intro desde fuera (p.ej. con un toggle OSC)
-function Intro_reset() {
-  __intro_state.t = 0
-  __intro_state.phase = 0
-  // re-centrar por si cambió el viewport
-  __intro_state.center = createVector(width * 0.5, height * 0.62)
-  // recrear el emisor y limpiar partículas (evita “humo viejo”)
-  __intro_state.emitter = new __Emitter(
-    __intro_state.center.x,
-    __intro_state.center.y,
-    __intro_state.img
-  )
-}
-
-// Salta la intro y vuelve al sketch de inmediato
-function Intro_skip() {
-  __intro_state.phase = 2
-  __intro_state.t = 0
-  if (__intro_state.emitter && __intro_state.emitter.particles) {
-    __intro_state.emitter.particles.length = 0
-  }
 }
