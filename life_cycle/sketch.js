@@ -88,8 +88,8 @@ function setup() {
     if (addr === '/2/multitoggle/5/2') btnC = val
 
     // Small puff when 1 is pressed
-    if (addr === '/group7/push1' && val === 1) {
-      particles = makeParticles(120)
+    if (addr === '/2/multitoggle/1/5' && val === 1) {
+      particles = makeParticles(320)
       puffT = 0
     }
 

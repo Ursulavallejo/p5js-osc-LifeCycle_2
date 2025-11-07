@@ -8,11 +8,13 @@
 //    Intro_isDone()
 
 let __intro_state = {
+  baseBG: 30, // gris del sketch
+  gradientStrength: 0.35, // 0.0..1.0 cuanto oscurece el centro
   phase: 0, // 0: fade-in text, 1: smoke, 2: done
   t: 0, // phase time (seconds)
   fadeSec: 3.5,
   holdSec: 2.0,
-  smokeSec: 6.0, // <= 0 to run indefinitely
+  smokeSec: 0, // 6.0,<= 0 to run indefinitely
   quote:
     '“The nitrogen in our DNA, the calcium in our teeth, the iron in our blood — were made in the interiors of collapsing stars. We are made of star-stuff.”',
   author: '— Carl Sagan',
@@ -49,6 +51,9 @@ function Intro_init(opts = {}) {
   __intro_state.t = 0
   __intro_state.phase = 0
   __intro_state.center = createVector(width * 0.5, height * 0.62)
+  if (typeof opts.baseBG === 'number') __intro_state.baseBG = opts.baseBG
+  if (typeof opts.gradientStrength === 'number')
+    __intro_state.gradientStrength = opts.gradientStrength
 
   // Load smoke texture or create fallback
   __intro_state.readyImg = false
@@ -102,7 +107,7 @@ function Intro_updateAndDraw(dtSeconds) {
   if (__intro_state.phase === 0) {
     // Match your scene background to avoid color jump:
     background(__intro_state.baseBG)
-    __intro_drawGradient(1.0)
+    // __intro_drawGradient(__intro_state.gradientStrength) // ← quitado: sin gradiente de fondo
     __intro_drawQuoteFade()
     if (__intro_state.t >= __intro_state.fadeSec + __intro_state.holdSec) {
       __intro_state.phase = 1
@@ -113,7 +118,7 @@ function Intro_updateAndDraw(dtSeconds) {
 
   if (__intro_state.phase === 1) {
     background(__intro_state.baseBG)
-    __intro_drawGradient(0.25)
+    // __intro_drawGradient(__intro_state.gradientStrength * 0.6) // ← quitado: sin gradiente de fondo
     __intro_runSmoke(dtSeconds)
     if (
       __intro_state.smokeSec > 0 &&
@@ -135,13 +140,14 @@ function Intro_isDone() {
 // -------------------- Internals: Quote & Gradient --------------------
 function __intro_drawGradient(strength = 1.0) {
   // Soft radial darkening (drawn on top of base background)
+  // NOT USED (gradientes desactivados)
   push()
   noStroke()
   const cx = width * 0.5,
     cy = height * 0.5
   const maxR = sqrt(sq(width) + sq(height)) * 0.6
   for (let r = maxR; r > 0; r -= 8) {
-    const a = map(r, 0, maxR, 180, 25) * strength
+    const a = map(r, 0, maxR, 120, 15) * strength
     fill(0, 0, 0, a)
     circle(cx, cy, r * 2)
   }
@@ -180,7 +186,7 @@ function __intro_drawQuoteFade() {
   textSize(quoteSize)
   textLeading(quoteSize * 1.12)
 
-  // Subtle glow layers
+  // Subtle glow layers (mantiene tu look sin gradiente de relleno)
   const glowRepeats = 3
   for (let i = glowRepeats; i > 0; i--) {
     const a = alpha * 0.16 * (i / glowRepeats)
@@ -189,7 +195,7 @@ function __intro_drawQuoteFade() {
     text(__intro_state.quote, boxX, boxYQuote, boxW, boxH)
   }
 
-  // Main text
+  // Main text (blanco puro con fade)
   fill(255, alpha)
   noStroke()
   text(__intro_state.quote, boxX, boxYQuote, boxW, boxH)
