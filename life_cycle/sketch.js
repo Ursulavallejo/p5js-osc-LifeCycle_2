@@ -1,6 +1,6 @@
 // === TouchOSC Beatmachine Mk2 → p5.js (2 faders + 3 buttons) ===
 // fader1: controls core radius (blue circle)
-// fader2: controls flower openness (0..1)
+// fader2: controls atoms openness (0..1)
 // buttons A/B/C: tint overrides (R/G/Y)
 
 let socket
@@ -11,6 +11,10 @@ let fader2 = 0 // 0..1  (flower openness)
 let btnA = 0,
   btnB = 0,
   btnC = 0
+// toggle state to show/hide the atoms (controlled by /1/toggle2)
+// Convention: 1 → show, 0 → hide
+let showAtoms = false // true: draw atoms, false: hide atoms
+let showAtomsNestBackground = true
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -62,11 +66,14 @@ function setup() {
     if (addr === '/1/push11') btnB = val
     if (addr === '/1/push10') btnC = val
 
-    // Optional: small puff when A is pressed
+    // Small puff when 1 is pressed
     if (addr === '/group7/push1' && val === 1) {
       particles = makeParticles(120)
       puffT = 0
     }
+
+    // Toogle show/hide Atoms
+    if (addr === '/1/toggle2') showAtoms = val === 1 // hide when 0, show when 1
 
     // Debug log
     // console.log('OSC →', addr, val)
@@ -81,7 +88,7 @@ function draw() {
   s2 += (fader2 - s2) * ALPHA
 
   // --- Background: rotating molecular nest ---
-  drawMolecularNest(frameCount * 0.002)
+  drawMolecularNestBackground(frameCount * 0.002)
 
   // --- Core (blue circle) driven by fader1 ---
   let coreR = map(s1, 0, 1, 50, 300)
@@ -95,9 +102,10 @@ function draw() {
   fill(col)
   ellipse(width / 2, height / 2, coreR)
 
-  // --- Flower driven by fader2 (openness 0..1) ---
-  drawFlowerAtCenter(s2, frameCount * 0.02)
-
+  // --- Atoms driven by fader2 (openness 0..1) ---
+  if (showAtoms) {
+    drawAtomsAtCenter(s2, frameCount * 0.02)
+  }
   // --- Optional puff particles when A is tapped ---
   if (particles.length) {
     puffT += deltaTime / 1000
@@ -125,8 +133,8 @@ function windowResized() {
 
 // -------------------- Visuals --------------------
 
-// Simple flower that opens with p in [0..1]
-function drawFlowerAtCenter(p, t) {
+// Simple Atoms that opens with p in [0..1]
+function drawAtomsAtCenter(p, t) {
   push()
   translate(width / 2, height / 2)
 
@@ -150,7 +158,7 @@ function drawFlowerAtCenter(p, t) {
   pop()
 }
 
-function drawMolecularNest(theta) {
+function drawMolecularNestBackground(theta) {
   push()
   translate(width / 2, height / 2)
   const rings = 4
