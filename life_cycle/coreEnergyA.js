@@ -119,7 +119,6 @@ function CE_runSystem(R) {
   // update + draw on the off-screen layer
   CE_layer.push()
   CE_layer.noStroke()
-  CE_layer.tint(255) // reset per-sprite tint; we tint once globally in draw()
 
   for (let i = CE_sys.particles.length - 1; i >= 0; i--) {
     const p = CE_sys.particles[i]

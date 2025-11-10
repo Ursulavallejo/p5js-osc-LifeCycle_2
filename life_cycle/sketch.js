@@ -38,14 +38,18 @@ let puffT = 0
 
 //Intro
 let img
+let bgMusic
 
 // CoreEnergy
 function preload() {
   CoreEnergy_preload('./assets/texture.png')
+  soundFormats('mp3', 'ogg')
+  bgMusic = loadSound('./assets/metamorphosis-experimental.mp3')
 }
 
 function setup() {
   createCanvas(windowWidth, windowHeight)
+  bgMusic.loop() // o .play()
   pixelDensity(1)
   noStroke()
   textAlign(CENTER, CENTER)
