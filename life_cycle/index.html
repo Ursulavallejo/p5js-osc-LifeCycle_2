@@ -1,3 +1,4 @@
+<!DOCTYPE html>
 <html>
   <head>
     <meta charset="UTF-8" />
@@ -12,10 +13,58 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/addons/p5.sound.min.js"></script>
 
     <script src="./intro.js"></script>
+    <!-- version A run better Effect 2 spheres/ still delay on the other B: One sphere-->
     <script src="./coreEnergyA.js"></script>
-    <!-- <script src="./coreEnergyA.js"></script> -->
+    <!-- <script src="./coreEnergyB.js"></script> -->
+
+    <!-- Claude Version to se if can work other way-->
+    <!-- <script src="./smokeCore.js"></script> -->
     <script src="./sketch.js"></script>
   </head>
 
-  <body></body>
+  <body>
+    <!-- Overlay “tap to enable audio” -->
+    <div
+      id="audio-gate"
+      style="
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font: 16px/1.4 sans-serif;
+        z-index: 9999;
+      "
+    >
+      <div style="text-align: center">
+        <p>click activate sound</p>
+        <button
+          id="audio-btn"
+          style="padding: 0.6rem 1rem; border-radius: 0.6rem"
+        >
+          SOUND
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // unlockAudio() is defined on sketch.js.
+      // Al hacer clic, we call teh sound
+      document.getElementById('audio-btn').addEventListener(
+        'click',
+        async () => {
+          try {
+            await unlockAudio()
+          } catch (e) {
+            console.warn('Audio not able to start:', e)
+          } finally {
+            const gate = document.getElementById('audio-gate')
+            if (gate) gate.remove()
+          }
+        },
+        { once: true }
+      )
+    </script>
+  </body>
 </html>

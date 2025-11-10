@@ -2,12 +2,13 @@
 // fader1: controls core radius (blue circle)
 // fader2: controls atoms openness (0..1)
 // buttons A/B/C: tint overrides (R/G/Y)
-
+window.bgMusic = null
 let socket
 
 // UI state (from OSC)
 let fader1 = 0 // 0..1  (core size)
 let faderDemo = 0 // 0..1  (core size DEMO)
+let faderVolume = 0.5 // 0..1 (Volumen de bgMusic, valor por defecto)
 
 let fader2 = 0 // 0..1  (atoms openness)
 let btnA = 0, // Core Energy
@@ -43,13 +44,13 @@ let bgMusic
 // CoreEnergy
 function preload() {
   CoreEnergy_preload('./assets/texture.png')
-  soundFormats('mp3', 'ogg')
-  bgMusic = loadSound('./assets/metamorphosis-experimental.mp3')
+  soundFormats('mp3', 'wav', 'ogg')
+  window.bgMusic = loadSound('./assets/metamorphosis-experimental.mp3')
 }
 
 function setup() {
   createCanvas(windowWidth, windowHeight)
-  bgMusic.loop() // o .play()
+
   pixelDensity(1)
   noStroke()
   textAlign(CENTER, CENTER)
@@ -89,14 +90,17 @@ function setup() {
 
     // Faders
 
-    // fader CoreEnergy DEMO
+    // fader CoreEnergy DEMO CORE
     if (addr === '/2/multifader/5') faderDemo = constrain(val, 0, 1)
     // fader CoreEnergy
     if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
     // atoms movement
     if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
+    // Sound
+    if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
 
-    // DEMO CIRCLES !!Handle  A / B / C  Toogle change color CoreEnergy
+    //Toogles
+    // DEMO CORE !!Handle  A / B / C  Toogle change color CoreEnergy
     if (addr === '/2/multitoggle/3/5') btnADemo = val
     if (addr === '/2/multitoggle/4/5') btnBDemo = val
     if (addr === '/2/multitoggle/5/5') btnCDemo = val
@@ -141,9 +145,13 @@ function draw() {
 
   // Smooth the faders
   s1 += (fader1 - s1) * ALPHA
-
   s2 += (fader2 - s2) * ALPHA
   s3 += (faderDemo - s3) * ALPHA
+
+  // Volume Fader
+  if (window.bgMusic && window.bgMusic.isPlaying()) {
+    window.bgMusic.setVolume(faderVolume)
+  }
 
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
@@ -168,13 +176,9 @@ function draw() {
     CoreEnergy_draw({ R: coreR, btnA, btnB, btnC })
   }
 
-  // --- Atoms driven by fader2 (openness 0..1) ---
-  if (showAtoms) {
-    drawAtomsAtCenter(s2, frameCount * 0.02)
-  }
-
   // --- Core (blue circle) driven by faderDEMO ---
   if (showCoreEnergyDemo) {
+    ///  SIMPLE CIRCLES FORM
     let coreRDemo = map(s3, 0, 1, 50, 300)
     // Color override via buttons (momentary)
     let col = color(100, 200, 255) // default blue
@@ -184,6 +188,13 @@ function draw() {
 
     fill(col)
     ellipse(width / 2, height / 2, coreRDemo)
+    // const coreRDemo = map(s3, 0, 1, 50, 300)
+    // CoreEnergy_draw({ R: coreRDemo, btnADemo, btnBDemo, btnCDemo })
+  }
+
+  // --- Atoms driven by fader2 (openness 0..1) ---
+  if (showAtoms) {
+    drawAtomsAtCenter(s2, frameCount * 0.02)
   }
 
   // HUD
@@ -201,7 +212,42 @@ function draw() {
   //   height - 28
   // )
 }
+// -------------------- sound -------------------
+// async function unlockAudio() {
+//   try {
+//     // Desbloquear el contexto (userStartAudio es una función global de p5.sound)
+//     if (getAudioContext().state !== 'running') {
+//       await userStartAudio()
+//     }
 
+//     // Reproducir la música si está cargada y no está sonando
+//     if (window.bgMusic && !window.bgMusic.isPlaying()) {
+//       window.bgMusic.setVolume(0)
+//       window.bgMusic.loop()
+//       // Fade-in suave
+//       window.bgMusic.fade(0.6, 1200) // p5.sound.fade(targetVolume, duration)
+//     }
+//   } catch (e) {
+//     console.warn('coundt start audio:', e)
+//   }
+// }
+async function unlockAudio() {
+  try {
+    // Desbloquear el contexto
+    if (getAudioContext().state !== 'running') {
+      await userStartAudio()
+    }
+
+    // Reproducir la música si está cargada y no está sonando
+    if (window.bgMusic && !window.bgMusic.isPlaying()) {
+      // Establecer el volumen inicial al valor del fader
+      window.bgMusic.setVolume(faderVolume)
+      window.bgMusic.loop()
+    }
+  } catch (e) {
+    console.warn('Cant iniciate audio:', e)
+  }
+}
 // -------------------- Visuals --------------------
 
 // Simple Atoms that opens with p in [0..1]
