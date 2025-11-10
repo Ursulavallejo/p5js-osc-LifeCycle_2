@@ -157,18 +157,7 @@ function draw() {
     drawPuff(puffT)
     if (puffT > 1.5) particles = []
   }
-  // --- Core (blue circle) driven by faderDEMO ---
-  if (showCoreEnergyDemo) {
-    let coreRDemo = map(s3, 0, 1, 50, 300)
-    // Color override via buttons (momentary)
-    let col = color(100, 200, 255) // default blue
-    if (btnA) col = color(255, 80, 80) // red
-    if (btnB) col = color(80, 255, 120) // green
-    if (btnC) col = color(255, 255, 100) // yellow
 
-    fill(col)
-    ellipse(width / 2, height / 2, coreRDemo)
-  }
   // --- CoreEnergy (smoke moon) driven by fader1 ---
   if (showCoreEnergy) {
     const coreR = map(s1, 0, 1, 50, 300)
@@ -178,6 +167,19 @@ function draw() {
   // --- Atoms driven by fader2 (openness 0..1) ---
   if (showAtoms) {
     drawAtomsAtCenter(s2, frameCount * 0.02)
+  }
+
+  // --- Core (blue circle) driven by faderDEMO ---
+  if (showCoreEnergyDemo) {
+    let coreRDemo = map(s3, 0, 1, 50, 300)
+    // Color override via buttons (momentary)
+    let col = color(100, 200, 255) // default blue
+    if (btnADemo) col = color(255, 80, 80) // red
+    if (btnBDemo) col = color(80, 255, 120) // green
+    if (btnCDemo) col = color(255, 255, 100) // yellow
+
+    fill(col)
+    ellipse(width / 2, height / 2, coreRDemo)
   }
 
   // HUD
@@ -194,10 +196,6 @@ function draw() {
   //   width / 2,
   //   height - 28
   // )
-}
-
-function windowResized() {
-  resizeCanvas(windowWidth, windowHeight)
 }
 
 // -------------------- Visuals --------------------
@@ -284,4 +282,18 @@ function drawPuff(tp) {
 // Easing
 function easeOutCubic(x) {
   return 1 - Math.pow(1 - x, 3)
+}
+
+function CoreEnergy_resize() {
+  if (!CE_layer) return
+  CE_layer.remove()
+  CE_layer = createGraphics(width, height)
+  CE_layer.pixelDensity(1)
+  CE_layer.imageMode(CENTER)
+  CE_layer.colorMode(HSB, 360, 100, 100, 255)
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight)
+  if (typeof CoreEnergy_resize === 'function') CoreEnergy_resize()
 }

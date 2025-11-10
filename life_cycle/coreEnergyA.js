@@ -116,17 +116,10 @@ function CE_runSystem(R) {
   const turb = 0.002 + 0.0022 * w2 // [0.002..0.0042]
   const drift = 0.05 + 0.1 * w3 // [0.05..0.15]
 
-  // ---- DRAW ON OFF-SCREEN LAYER, CLIPPED TO THE CURRENT CIRCLE ----
+  // update + draw on the off-screen layer
   CE_layer.push()
   CE_layer.noStroke()
-
-  // Clip particle drawing to the same circle as the trail
-  const cx = width * 0.5,
-    cy = height * 0.5
-  CE_layer.drawingContext.save()
-  CE_layer.drawingContext.beginPath()
-  CE_layer.drawingContext.arc(cx, cy, R, 0, Math.PI * 2)
-  CE_layer.drawingContext.clip()
+  CE_layer.tint(255) // reset per-sprite tint; we tint once globally in draw()
 
   for (let i = CE_sys.particles.length - 1; i >= 0; i--) {
     const p = CE_sys.particles[i]
@@ -134,12 +127,11 @@ function CE_runSystem(R) {
     CE_layer.image(CE_sys.img, p.x, p.y, p.size, p.size)
     if (p.dead) CE_sys.particles.splice(i, 1)
   }
-
-  CE_layer.drawingContext.restore()
   CE_layer.pop()
 
   // keep density (adaptive target)
   while (CE_sys.particles.length < CE_targetParts) CE_addParticle(R)
+  // if we overshoot (because target was reduced), trim softly
   if (CE_sys.particles.length > CE_targetParts) {
     CE_sys.particles.length = CE_targetParts | 0
   }
