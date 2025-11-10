@@ -1,4 +1,3 @@
-// bridge.js (v4 friendly, Windows-friendly)
 // Socket.IO v4 compatible OSC <-> WebSocket bridge.
 // - Local IP discovery with Windows-friendly heuristics (prefers Wi-Fi).
 // - Clear logs, better error handling, and graceful shutdown.

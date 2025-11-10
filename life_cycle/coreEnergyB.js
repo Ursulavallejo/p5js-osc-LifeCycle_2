@@ -1,4 +1,3 @@
-// CoreEnergy.js — smoke core (optimized)
 // Public API: CoreEnergy_preload(path), CoreEnergy_init(), CoreEnergy_draw({ R, btnA, btnB, btnC, trailAlpha })
 
 let CE_tex = null
@@ -8,11 +7,11 @@ const CE_sys = { particles: [], img: null }
 // Tunables
 const CE_NOISE_TIME = 1.8
 const CE_MIN_PARTS = 800 // adaptive floor
-const CE_MAX_PARTS = 2600 // adaptive ceiling (your old value)
+const CE_MAX_PARTS = 2600 // adaptive ceiling
 const CE_STEP_SPEED = 2.0 // overall motion factor
 const CE_ALPHA_DEFAULT = 32 // trail strength inside the circle
 
-// Timing + auto LOD
+// Timing + auto LOD (Level of Detail)
 let CE_prevMs = 0
 let CE_fpsEMA = 60 // exponential moving average of fps
 const CE_FPS_GOOD = 54 // if above → can increase density
@@ -39,9 +38,9 @@ function CE_addParticle(R) {
 }
 
 function CE_pickTint(btnA, btnB, btnC) {
-  if (btnA) return { h: 340, s: 90, b: 100, a: 60 }
-  if (btnB) return { h: 180, s: 85, b: 100, a: 55 }
-  if (btnC) return { h: 50, s: 95, b: 100, a: 65 }
+  if (btnA) return { h: 340, s: 90, b: 100, a: 60 } //Burgundy
+  if (btnB) return { h: 180, s: 85, b: 100, a: 55 } //Turquoise
+  if (btnC) return { h: 50, s: 95, b: 100, a: 65 } // Yellow
   return { h: 220, s: 25, b: 100, a: 48 }
 }
 
@@ -88,7 +87,7 @@ function CE_stepParticle(p, t, turb, spin, drift, R) {
   p.x += (Math.random() - 0.5) * 0.08
   p.y += (Math.random() - 0.5) * 0.08
 
-  // keep inside (no sqrt)
+  // keep inside
   const dx = p.x - cx,
     dy = p.y - cy
   const edge = R * 0.985,
@@ -228,8 +227,7 @@ function CoreEnergy_draw({
   image(CE_layer, 0, 0)
   drawingContext.globalCompositeOperation = prev
 }
-
-// Optional, if window resizes:
+// if window resizes:
 function CoreEnergy_resize() {
   if (!CE_layer) return
   CE_layer.remove()

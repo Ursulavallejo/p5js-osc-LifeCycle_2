@@ -1,4 +1,3 @@
-// CoreEnergy.js — smoke core (optimized)
 // Public API: CoreEnergy_preload(path), CoreEnergy_init(), CoreEnergy_draw({ R, btnA, btnB, btnC, trailAlpha })
 
 let CE_tex = null

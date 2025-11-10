@@ -1,4 +1,4 @@
-// intro.js — synchronized positions (text and particles perfectly aligned)
+//  synchronized positions (text and particles perfectly aligned)
 
 // -------------------- State --------------------
 let __intro_state = {

@@ -1,14 +1,16 @@
-// === TouchOSC Beatmachine Mk2 → p5.js (2 faders + 3 buttons) ===
-// fader1: controls core radius (blue circle)
-// fader2: controls atoms openness (0..1)
-// buttons A/B/C: tint overrides (R/G/Y)
+// === TouchOSC Beatmachine Mk2 → p5.js ( faders +  buttons) ===
+// fader1: controls CoreEnergy radius (smoke moon size)
+// fader2: controls Atoms openness (0..1)
+// faderVolume: controls Background Music Volume (0..1)
+// faderDemo: controls CoreEnergy DEMO size (Simple blue circle)
+// buttons A/B/C: CoreEnergy tint overrides (Burgundy/Turquoise/Yellow) // Same for demo
 window.bgMusic = null
 let socket
 
 // UI state (from OSC)
 let fader1 = 0 // 0..1  (core size)
 let faderDemo = 0 // 0..1  (core size DEMO)
-let faderVolume = 0.5 // 0..1 (Volumen de bgMusic, valor por defecto)
+let faderVolume = 0.5 // 0..1 (Background Music Volume, default value)
 
 let fader2 = 0 // 0..1  (atoms openness)
 let btnA = 0, // Core Energy
@@ -19,7 +21,7 @@ let btnADemo = 0,
   btnBDemo = 0,
   btnCDemo = 0
 
-// toggle state to show/hide the atoms (controlled by /1/toggle2)
+// toggle state to show/hide
 // Convention: 1 → show, 0 → hide
 let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
@@ -33,7 +35,7 @@ let s1 = 0,
   s3 = 0
 const ALPHA = 0.25
 
-// Particles for a tiny "bloom puff" when btnA is tapped (optional)
+// Particles for a tiny "bloom puff" when  tapped
 let particles = []
 let puffT = 0
 
@@ -84,9 +86,6 @@ function setup() {
         if (typeof Intro_skip === 'function') Intro_skip()
       }
     }
-
-    //  {  while (!Intro_isDone()) Intro_updateAndDraw(999) // avanzar a done
-    // }
 
     // Faders
 
