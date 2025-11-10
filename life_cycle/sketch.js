@@ -7,6 +7,8 @@ let socket
 
 // UI state (from OSC)
 let fader1 = 0 // 0..1  (core size)
+let faderDemo = 0 // 0..1  (core size DEMO)
+
 let fader2 = 0 // 0..1  (atoms openness)
 let btnA = 0, // Core Energy
   btnB = 0,
@@ -26,7 +28,8 @@ let showCoreEnergyDemo = false //DEMO CIRCLES !!
 
 // Smoothing for nicer motion
 let s1 = 0,
-  s2 = 0
+  s2 = 0,
+  s3 = 0
 const ALPHA = 0.25
 
 // Particles for a tiny "bloom puff" when btnA is tapped (optional)
@@ -35,6 +38,11 @@ let puffT = 0
 
 //Intro
 let img
+
+// CoreEnergy
+function preload() {
+  CoreEnergy_preload('./assets/texture.png')
+}
 
 function setup() {
   createCanvas(windowWidth, windowHeight)
@@ -77,8 +85,10 @@ function setup() {
 
     // Faders
 
+    // fader CoreEnergy DEMO
+    if (addr === '/2/multifader/5') faderDemo = constrain(val, 0, 1)
     // fader CoreEnergy
-    if (addr === '/2/multifader/5') fader1 = constrain(val, 0, 1)
+    if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
     // atoms movement
     if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
 
@@ -86,6 +96,11 @@ function setup() {
     if (addr === '/2/multitoggle/3/5') btnADemo = val
     if (addr === '/2/multitoggle/4/5') btnBDemo = val
     if (addr === '/2/multitoggle/5/5') btnCDemo = val
+
+    // Handle  A / B / C  Toogle change color CoreEnergy
+    if (addr === '/2/multitoggle/3/3') btnA = val
+    if (addr === '/2/multitoggle/4/3') btnB = val
+    if (addr === '/2/multitoggle/5/3') btnC = val
 
     // Small puff when 1 is pressed
     if (addr === '/2/led1' && val === 1) {
@@ -97,6 +112,7 @@ function setup() {
     // hide when 0, show when 1
 
     if (addr === '/2/multitoggle/1/5') showCoreEnergyDemo = val === 1 //CoreEnergy DEMO CIRCLES !!
+    if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 //CoreEnergy
     if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 //atomNetBackground
     if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
 
@@ -112,6 +128,8 @@ function setup() {
     fadeSec: 3.5,
     holdSec: 2.0,
   })
+  // Initialize CoreEnergy
+  CoreEnergy_init()
 }
 
 function draw() {
@@ -119,7 +137,9 @@ function draw() {
 
   // Smooth the faders
   s1 += (fader1 - s1) * ALPHA
+
   s2 += (fader2 - s2) * ALPHA
+  s3 += (faderDemo - s3) * ALPHA
 
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
@@ -137,9 +157,9 @@ function draw() {
     drawPuff(puffT)
     if (puffT > 1.5) particles = []
   }
-  // --- Core (blue circle) driven by fader1 ---
+  // --- Core (blue circle) driven by faderDEMO ---
   if (showCoreEnergyDemo) {
-    let coreR = map(s1, 0, 1, 50, 300)
+    let coreRDemo = map(s3, 0, 1, 50, 300)
     // Color override via buttons (momentary)
     let col = color(100, 200, 255) // default blue
     if (btnA) col = color(255, 80, 80) // red
@@ -147,7 +167,12 @@ function draw() {
     if (btnC) col = color(255, 255, 100) // yellow
 
     fill(col)
-    ellipse(width / 2, height / 2, coreR)
+    ellipse(width / 2, height / 2, coreRDemo)
+  }
+  // --- CoreEnergy (smoke moon) driven by fader1 ---
+  if (showCoreEnergy) {
+    const coreR = map(s1, 0, 1, 50, 300)
+    CoreEnergy_draw({ R: coreR, btnA, btnB, btnC })
   }
 
   // --- Atoms driven by fader2 (openness 0..1) ---
