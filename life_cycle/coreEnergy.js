@@ -115,6 +115,15 @@ function CE_runSystem(sys, R) {
   while (sys.particles.length < 2600) CE_addParticle(sys, R)
 }
 
+function CE_trailInsideCircle(cx, cy, R, alpha) {
+  // Rellena de negro translúcido SOLO el área del clip actual (el círculo)
+  // Sin esto, el background del sketch se veía "lavado".
+  noStroke()
+  fill(0, alpha)
+  // Un rectángulo grande sirve porque seguimos dentro del clip
+  rect(cx - R - 2, cy - R - 2, (R + 2) * 2, (R + 2) * 2)
+}
+
 // ---------------- Public API ----------------
 
 function CoreEnergy_preload(path = './assets/texture.png') {
@@ -130,25 +139,35 @@ function CoreEnergy_init() {
   imageMode(CENTER)
 }
 
-function CoreEnergy_draw({ R, btnA = 0, btnB = 0, btnC = 0 }) {
-  // Trail + glow
-  blendMode(BLEND)
-  background(0, 0, 0, 35)
-  blendMode(ADD)
+function CoreEnergy_draw({ R, btnA = 0, btnB = 0, btnC = 0, trailAlpha = 28 }) {
+  const cx = width / 2,
+    cy = height / 2
 
-  // Clip to current circle
+  // 1) Clip SOLO el área del círculo
   drawingContext.save()
   drawingContext.beginPath()
-  drawingContext.arc(width / 2, height / 2, R, 0, TWO_PI)
+  drawingContext.arc(cx, cy, R, 0, TWO_PI)
   drawingContext.clip()
 
-  // Tint once per frame (HSB)
+  // 2) Trail SOLO dentro del círculo (sin tocar el resto de la escena)
+  CE_trailInsideCircle(cx, cy, R, trailAlpha)
+
+  // 3) ADD blending SOLO para las partículas
+  const prevComposite = drawingContext.globalCompositeOperation
+  drawingContext.globalCompositeOperation = 'lighter' // = ADD
+
+  // 4) Tint en HSB, pero restauramos luego el modo de color
+  colorMode(HSB, 360, 100, 100, 255)
   const tcol = CE_pickTint(btnA, btnB, btnC)
   tint(tcol.h, tcol.s, tcol.b, tcol.a)
 
-  // Run system
+  // 5) Actualizar + dibujar partículas
   CE_runSystem(CE_system, R)
 
+  // 6) Restaurar estado gráfico
+  tint(255) // quita el tint global
+  colorMode(RGB, 255) // devuelve modo de color por defecto
+  drawingContext.globalCompositeOperation = prevComposite
   drawingContext.restore()
 }
 
