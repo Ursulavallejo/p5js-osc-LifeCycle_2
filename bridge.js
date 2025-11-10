@@ -100,6 +100,10 @@ const httpServer = http.createServer((req, res) => {
 const io = new Server(httpServer, {
   // For local development, allow any origin. For production, restrict this.
   cors: { origin: '*' },
+  transports: ['websocket', 'polling'], // <— habilita ambos
+  allowUpgrades: true, // <— permite upgrade de polling→WS
+  pingTimeout: 20000,
+  pingInterval: 20000,
 })
 
 httpServer.listen(WS_PORT, () => {
