@@ -1,0 +1,55 @@
+
+# === Node ===
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.env
+.env.local
+
+# === System / OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+*.tmp
+*.swp
+
+# === VSCode / IDE ===
+.vscode/
+.idea/
+*.code-workspace
+
+# === Build & Cache ===
+dist/
+build/
+.cache/
+*.bak
+
+# === Logs & Dumps ===
+*.log
+*.gz
+*.zip
+*.tar
+*.tgz
+
+# === Local servers / LiveServer temp ===
+.liveserver.json
+*.pid
+
+# === p5.js Generated Files ===
+*.manifest
+*.json~
+
+
+
+# Keep your small visuals and texture files
+!assets/texture.png
+!assets/MomoTrustDisplay.ttf
+
+
+
+# === OS backup files ===
+*.bak
+*~

@@ -10,15 +10,6 @@ This experiment connects **OSC** with **p5.js (visuals)** and **TouchOSC** to cr
 
 ---
 
-### Connect to TouchOSc app check IP
-
-ipconfig
-
-Wireless LAN adapter Wi-Fi:
-IPv4 Address. . . .: THIS NUMBER AS HOSt
-
----
-
 ### How to Run the Project
 
 #### 1️⃣ Start the OSC Bridge
@@ -35,4 +26,19 @@ You should see something like:
 ✅ Socket.IO listening on http://localhost:8081
 ```
 
+And on terminal you will see the touch IP yo need to use. Otherwise:
+
+### Connect to TouchOSc app check IP
+
+```bash
+ipconfig
+
+Wireless LAN adapter Wi-Fi:
+IPv4 Address. . . .: THIS NUMBER AS HOSt
+```
+
+---
+
 #### 2️⃣ Start the Web Visualization
+
+Go to the folder and start the index.js via Live Server
