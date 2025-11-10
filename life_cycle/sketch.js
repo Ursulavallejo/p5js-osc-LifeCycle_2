@@ -7,16 +7,22 @@ let socket
 
 // UI state (from OSC)
 let fader1 = 0 // 0..1  (core size)
-let fader2 = 0 // 0..1  (flower openness)
-let btnA = 0,
+let fader2 = 0 // 0..1  (atoms openness)
+let btnA = 0, // Core Energy
   btnB = 0,
   btnC = 0
+//DEMO CIRCLES !!
+let btnADemo = 0,
+  btnBDemo = 0,
+  btnCDemo = 0
+
 // toggle state to show/hide the atoms (controlled by /1/toggle2)
 // Convention: 1 → show, 0 → hide
 let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
 let showAtomsNestBackground = false
 let showCoreEnergy = false
+let showCoreEnergyDemo = false //DEMO CIRCLES !!
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -72,14 +78,14 @@ function setup() {
     // Faders
 
     // fader CoreEnergy
-    if (addr === '/2/multifader/2') fader1 = constrain(val, 0, 1)
+    if (addr === '/2/multifader/5') fader1 = constrain(val, 0, 1)
     // atoms movement
     if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
 
-    // Handle  A / B / C  Toogle change color CoreEnergy
-    if (addr === '/2/multitoggle/3/2') btnA = val
-    if (addr === '/2/multitoggle/4/2') btnB = val
-    if (addr === '/2/multitoggle/5/2') btnC = val
+    // DEMO CIRCLES !!Handle  A / B / C  Toogle change color CoreEnergy
+    if (addr === '/2/multitoggle/3/5') btnADemo = val
+    if (addr === '/2/multitoggle/4/5') btnBDemo = val
+    if (addr === '/2/multitoggle/5/5') btnCDemo = val
 
     // Small puff when 1 is pressed
     if (addr === '/2/led1' && val === 1) {
@@ -90,8 +96,8 @@ function setup() {
     // Toogles show/hide Atoms and atomNetBackground
     // hide when 0, show when 1
 
-    if (addr === '/2/multitoggle/1/2') showCoreEnergy = val === 1 //CoreEnergy
-    if (addr === '/2/multitoggle/1/3') showAtomsNestBackground = val === 1 //atomNetBackground
+    if (addr === '/2/multitoggle/1/5') showCoreEnergyDemo = val === 1 //CoreEnergy DEMO CIRCLES !!
+    if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 //atomNetBackground
     if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
 
     // Debug log
@@ -132,7 +138,7 @@ function draw() {
     if (puffT > 1.5) particles = []
   }
   // --- Core (blue circle) driven by fader1 ---
-  if (showCoreEnergy) {
+  if (showCoreEnergyDemo) {
     let coreR = map(s1, 0, 1, 50, 300)
     // Color override via buttons (momentary)
     let col = color(100, 200, 255) // default blue
