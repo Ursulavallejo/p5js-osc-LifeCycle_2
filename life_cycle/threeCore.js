@@ -5,6 +5,7 @@
   let coreMesh, particleSystem
   let particleGeo, particleMat
   let basePositions = []
+
   let noise = null
   let isVisible = false
   let clock = null
