@@ -2,24 +2,24 @@
 // fader1: controls CoreEnergy radius (smoke moon size)
 // fader2: controls Atoms openness (0..1)
 // faderVolume: controls Background Music Volume (0..1)
-// faderDemo: controls CoreEnergy DEMO size (Simple blue circle)
-// buttons A/B/C: CoreEnergy tint overrides (Burgundy/Turquoise/Yellow) // Same for demo
+// faderThree: controls CoreEnergy Three size
+// buttons A/B/C: CoreEnergy tint overrides (Burgundy/Turquoise/Yellow) // Same Three
 window.bgMusic = null
 let socket
 
 // UI state (from OSC)
 let fader1 = 0 // 0..1  (core size)
-let faderDemo = 0 // 0..1  (core size DEMO)
+let faderThree = 0 // 0..1  (core size Three)
 let faderVolume = 0.5 // 0..1 (Background Music Volume, default value)
 
 let fader2 = 0 // 0..1  (atoms openness)
 let btnA = 0, // Core Energy
   btnB = 0,
   btnC = 0
-//DEMO CIRCLES !!
-let btnADemo = 0,
-  btnBDemo = 0,
-  btnCDemo = 0
+//Three js Core
+let btnAThree = 0,
+  btnBThree = 0,
+  btnCThree = 0
 
 // toggle state to show/hide
 // Convention: 1 → show, 0 → hide
@@ -27,7 +27,7 @@ let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
 let showAtomsNestBackground = false
 let showCoreEnergy = false
-let showCoreEnergyDemo = false //DEMO CIRCLES !!
+let showCoreEnergyThree = false //Three js
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -89,20 +89,21 @@ function setup() {
 
     // Faders
 
-    // fader CoreEnergy DEMO CORE
-    if (addr === '/2/multifader/5') faderDemo = constrain(val, 0, 1)
+    // fader Three.js
+    if (addr === '/2/multifader/5') faderThree = constrain(val, 0, 1)
     // fader CoreEnergy
     if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
     // atoms movement
     if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
     // Sound
     if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
+    // Three.js
 
     //Toogles
-    // DEMO CORE !!Handle  A / B / C  Toogle change color CoreEnergy
-    if (addr === '/2/multitoggle/3/5') btnADemo = val
-    if (addr === '/2/multitoggle/4/5') btnBDemo = val
-    if (addr === '/2/multitoggle/5/5') btnCDemo = val
+    // Three CORE !!Handle  A / B / C  Toogle change color CoreEnergy Three.js
+    if (addr === '/2/multitoggle/3/5') btnAThree = val
+    if (addr === '/2/multitoggle/4/5') btnBThree = val
+    if (addr === '/2/multitoggle/5/5') btnCThree = val
 
     // Handle  A / B / C  Toogle change color CoreEnergy
     if (addr === '/2/multitoggle/3/3') btnA = val
@@ -118,7 +119,14 @@ function setup() {
     // Toogles show/hide Atoms and atomNetBackground
     // hide when 0, show when 1
 
-    if (addr === '/2/multitoggle/1/5') showCoreEnergyDemo = val === 1 //CoreEnergy DEMO CIRCLES !!
+    if (addr === '/2/multitoggle/1/5') {
+      showCoreEnergyThree = val === 1 // Three.js core ON/OFF
+
+      if (window.ThreeCore && window.ThreeCore.setVisible) {
+        window.ThreeCore.setVisible(showCoreEnergyThree)
+      }
+    }
+
     if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 //CoreEnergy
     if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 //atomNetBackground
     if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
@@ -130,13 +138,18 @@ function setup() {
   // Initialize intro (you can pass a texture path or let it auto-generate one)
   Intro_init({
     fontPath: './assets/MomoTrustDisplay.ttf',
-    // yQuoteFrac: 0.55, // texto un poco más abajo
-    // yAuthorFrac: 0.8,
+
     fadeSec: 3.5,
     holdSec: 2.0,
   })
   // Initialize CoreEnergy
   CoreEnergy_init()
+
+  // Initialize Three.js sphere (ThreeCore), start hidden
+  if (window.ThreeCore && window.ThreeCore.init) {
+    window.ThreeCore.init()
+    window.ThreeCore.setVisible(false) // start hiden
+  }
 }
 
 function draw() {
@@ -145,7 +158,7 @@ function draw() {
   // Smooth the faders
   s1 += (fader1 - s1) * ALPHA
   s2 += (fader2 - s2) * ALPHA
-  s3 += (faderDemo - s3) * ALPHA
+  s3 += (faderThree - s3) * ALPHA
 
   // Volume Fader
   if (window.bgMusic && window.bgMusic.isPlaying()) {
@@ -175,20 +188,20 @@ function draw() {
     CoreEnergy_draw({ R: coreR, btnA, btnB, btnC })
   }
 
-  // --- Core (blue circle) driven by faderDEMO ---
-  if (showCoreEnergyDemo) {
-    ///  SIMPLE CIRCLES FORM
-    let coreRDemo = map(s3, 0, 1, 50, 300)
-    // Color override via buttons (momentary)
-    let col = color(100, 200, 255) // default blue
-    if (btnADemo) col = color(255, 80, 80) // red
-    if (btnBDemo) col = color(80, 255, 120) // green
-    if (btnCDemo) col = color(255, 255, 100) // yellow
+  // --- Three.js Core driven by faderThree ---
+  if (showCoreEnergyThree && window.ThreeCore && window.ThreeCore.update) {
+    // Escala de radio para el mundo de Three.js
+    const radiusThree = map(s3, 0, 1, 0.8, 3.0)
 
-    fill(col)
-    ellipse(width / 2, height / 2, coreRDemo)
-    // const coreRDemo = map(s3, 0, 1, 50, 300)
-    // CoreEnergy_draw({ R: coreRDemo, btnADemo, btnBDemo, btnCDemo })
+    let rgb = { r: 100, g: 200, b: 255 } // blue default
+    if (btnAThree) rgb = { r: 255, g: 80, b: 80 } // red
+    if (btnBThree) rgb = { r: 80, g: 255, b: 120 } // blue
+    if (btnCThree) rgb = { r: 255, g: 255, b: 100 } // yellow
+
+    window.ThreeCore.update({
+      radius: radiusThree,
+      color: rgb,
+    })
   }
 
   // --- Atoms driven by fader2 (openness 0..1) ---
@@ -212,24 +225,7 @@ function draw() {
   // )
 }
 // -------------------- sound -------------------
-// async function unlockAudio() {
-//   try {
-//     // Desbloquear el contexto (userStartAudio es una función global de p5.sound)
-//     if (getAudioContext().state !== 'running') {
-//       await userStartAudio()
-//     }
 
-//     // Reproducir la música si está cargada y no está sonando
-//     if (window.bgMusic && !window.bgMusic.isPlaying()) {
-//       window.bgMusic.setVolume(0)
-//       window.bgMusic.loop()
-//       // Fade-in suave
-//       window.bgMusic.fade(0.6, 1200) // p5.sound.fade(targetVolume, duration)
-//     }
-//   } catch (e) {
-//     console.warn('coundt start audio:', e)
-//   }
-// }
 async function unlockAudio() {
   try {
     // Desbloquear el contexto
@@ -345,4 +341,7 @@ function CoreEnergy_resize() {
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight)
   if (typeof CoreEnergy_resize === 'function') CoreEnergy_resize()
+  if (window.ThreeCore && window.ThreeCore.resize) {
+    window.ThreeCore.resize()
+  }
 }
