@@ -42,3 +42,7 @@ IPv4 Address. . . .: THIS NUMBER AS HOSt
 #### 2️⃣ Start the Web Visualization
 
 Go to the folder and start the index.js via Live Server
+
+This should open local server:5500
+
+####

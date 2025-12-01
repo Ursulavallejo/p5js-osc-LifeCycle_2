@@ -190,10 +190,10 @@ function renderParticles(R, tint) {
 }
 
 // ---------- COLOR SELECTION ----------
-function getColor(btnA, btnB, btnC) {
-  if (btnA) return { h: 340, s: 90, b: 100 }
-  if (btnB) return { h: 180, s: 85, b: 100 }
-  if (btnC) return { h: 50, s: 95, b: 100 }
+function getColor(btnA_smoke, btnB_smoke, btnC_smoke) {
+  if (btnA_smoke) return { h: 340, s: 90, b: 100 }
+  if (btnB_smoke) return { h: 180, s: 85, b: 100 }
+  if (btnC_smoke) return { h: 50, s: 95, b: 100 }
   return { h: 220, s: 25, b: 100 }
 }
 
@@ -210,7 +210,7 @@ function updateLOD(dt) {
 }
 
 // ---------- PUBLIC API ----------
-function SmokeCore_preload(path = './texture.png') {
+function SmokeCore_preload(path = './assets/texture.png') {
   SC_tex = loadImage(path)
 }
 
@@ -234,7 +234,12 @@ function SmokeCore_init() {
 
 let prevTime = 0
 
-function SmokeCore_draw({ R = 220, btnA = 0, btnB = 0, btnC = 0 } = {}) {
+function SmokeCore_draw({
+  R = 220,
+  btnA_smoke = 0,
+  btnB_smoke = 0,
+  btnC_smoke = 0,
+} = {}) {
   const now = millis()
   const dt = (now - prevTime) / 1000
   prevTime = now
@@ -279,7 +284,7 @@ function SmokeCore_draw({ R = 220, btnA = 0, btnB = 0, btnC = 0 } = {}) {
   SC_buffer.pop()
 
   // Render particles with color
-  const tint = getColor(btnA, btnB, btnC)
+  const tint = getColor(btnA_smoke, btnB_smoke, btnC_smoke)
   renderParticles(R, tint)
 
   // Composite to main canvas

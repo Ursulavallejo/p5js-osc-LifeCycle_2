@@ -21,7 +21,7 @@ const DEFAULT_OSC_CLIENT_HOST = process.env.OSC_CLIENT_HOST || '127.0.0.1' // UD
 const DEFAULT_OSC_CLIENT_PORT = Number(process.env.OSC_CLIENT_PORT || 3334)
 
 // Optional: very-verbose OSC logging (set VERBOSE_OSC=1)
-const VERBOSE_OSC = process.env.VERBOSE_OSC === '1'
+const VERBOSE_OSC = process.env.VERBOSE_OSC === '0'
 
 // ---------------------------
 // Helpers (improved Windows pick)
@@ -154,11 +154,11 @@ function setupOsc(serverHost, serverPort, clientHost, clientPort) {
 
   // Forward any incoming OSC messages to ALL web clients
   oscServer.on('message', (msg, rinfo) => {
-    if (VERBOSE_OSC) {
-      console.log(
-        `📥 OSC IN  ${rinfo.address}:${rinfo.port} → ${prettyOsc(msg)}`
-      )
-    }
+    // if (VERBOSE_OSC) {
+    //   console.log(
+    //     `📥 OSC IN  ${rinfo.address}:${rinfo.port} → ${prettyOsc(msg)}`
+    //   )
+    // }
     // Emit using a dedicated "osc" event…
     io.emit('osc', { msg, from: rinfo })
     // …and also "message" for backward compatibility with older sketches
@@ -224,23 +224,23 @@ io.on('connection', (socket) => {
   // Expected: ['/address', arg1, arg2, ...]
   socket.on('message', (arr) => {
     if (!oscClient || !Array.isArray(arr) || arr.length === 0) return
-    try {
-      if (VERBOSE_OSC) console.log('📤 OSC OUT (message):', prettyOsc(arr))
-      oscClient.send.apply(oscClient, arr)
-    } catch (e) {
-      console.error('⚠️  Error sending OSC (message):', e.message)
-    }
+    // try {
+    //   if (VERBOSE_OSC) console.log('📤 OSC OUT (message):', prettyOsc(arr))
+    //   oscClient.send.apply(oscClient, arr)
+    // } catch (e) {
+    //   console.error('⚠️  Error sending OSC (message):', e.message)
+    // }
   })
 
   // Web → OSC (explicit event name)
   socket.on('osc-send', (arr) => {
     if (!oscClient || !Array.isArray(arr) || arr.length === 0) return
-    try {
-      if (VERBOSE_OSC) console.log('📤 OSC OUT (osc-send):', prettyOsc(arr))
-      oscClient.send.apply(oscClient, arr)
-    } catch (e) {
-      console.error('⚠️  Error sending OSC (osc-send):', e.message)
-    }
+    // try {
+    //   if (VERBOSE_OSC) console.log('📤 OSC OUT (osc-send):', prettyOsc(arr))
+    //   oscClient.send.apply(oscClient, arr)
+    // } catch (e) {
+    //   console.error('⚠️  Error sending OSC (osc-send):', e.message)
+    // }
   })
 
   socket.on('disconnect', () => {

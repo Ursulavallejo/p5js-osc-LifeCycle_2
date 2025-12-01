@@ -11,15 +11,24 @@ let socket
 let fader1 = 0 // 0..1  (core size)
 let faderDemo = 0 // 0..1  (core size DEMO)
 let faderVolume = 0.5 // 0..1 (Background Music Volume, default value)
+let faderSmoke_size = 0.5 // 0..1 controls smoke circle size
 
 let fader2 = 0 // 0..1  (atoms openness)
-let btnA = 0, // Core Energy
+
+// Core Energy
+let btnA = 0,
   btnB = 0,
   btnC = 0
-//DEMO CIRCLES !!
+
+//DEMO Circles
 let btnADemo = 0,
   btnBDemo = 0,
   btnCDemo = 0
+
+//Smoke !!
+let btnA_smoke = 0,
+  btnB_smoke = 0,
+  btnC_smoke = 0
 
 // toggle state to show/hide
 // Convention: 1 → show, 0 → hide
@@ -27,7 +36,8 @@ let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
 let showAtomsNestBackground = false
 let showCoreEnergy = false
-let showCoreEnergyDemo = false //DEMO CIRCLES !!
+let showCoreEnergyDemo = false //DEMO Circles
+let showSmokeCore = false //optimering
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -46,6 +56,7 @@ let bgMusic
 // CoreEnergy
 function preload() {
   CoreEnergy_preload('./assets/texture.png')
+  SmokeCore_preload('./assets/texture.png')
   soundFormats('mp3', 'wav', 'ogg')
   window.bgMusic = loadSound('./assets/metamorphosis-experimental.mp3')
 }
@@ -72,7 +83,7 @@ function setup() {
 
   // Map TouchOSC messages → our variables
   socket.on('message', (msg) => {
-    console.log('📩 OSC →', msg)
+    // console.log('📩 OSC →', msg)
     // msg shape: ['/addr', value]
     const [addr, valRaw] = msg
     const val = Number(valRaw)
@@ -89,25 +100,32 @@ function setup() {
 
     // Faders
 
-    // fader CoreEnergy DEMO CORE
+    // fader DEMO Circles
     if (addr === '/2/multifader/5') faderDemo = constrain(val, 0, 1)
     // fader CoreEnergy
     if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
+    // fader smokeCore
+    if (addr === '/2/multifader/7') faderSmoke_size = constrain(val, 0, 1)
     // atoms movement
     if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
     // Sound
     if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
 
     //Toogles
-    // DEMO CORE !!Handle  A / B / C  Toogle change color CoreEnergy
+    // DEMO Circles > Handle  A / B / C  Toogle change color CoreEnergy
     if (addr === '/2/multitoggle/3/5') btnADemo = val
     if (addr === '/2/multitoggle/4/5') btnBDemo = val
     if (addr === '/2/multitoggle/5/5') btnCDemo = val
 
-    // Handle  A / B / C  Toogle change color CoreEnergy
+    //CoreEnergy > Handle  A / B / C  Toogle change color
     if (addr === '/2/multitoggle/3/3') btnA = val
     if (addr === '/2/multitoggle/4/3') btnB = val
     if (addr === '/2/multitoggle/5/3') btnC = val
+
+    // SmkeCore > Handle  A / B / C  Toogle change color
+    if (addr === '/2/multitoggle/3/7') btnA_smoke = val
+    if (addr === '/2/multitoggle/4/7') btnB_smoke = val
+    if (addr === '/2/multitoggle/5/7') btnC_smoke = val
 
     // Small puff when 1 is pressed
     if (addr === '/2/led1' && val === 1) {
@@ -115,13 +133,14 @@ function setup() {
       puffT = 0
     }
 
-    // Toogles show/hide Atoms and atomNetBackground
+    // Toogles show/hide >> Atoms | atomNetBackground | circles | coreEnergy | smokeCore
     // hide when 0, show when 1
 
-    if (addr === '/2/multitoggle/1/5') showCoreEnergyDemo = val === 1 //CoreEnergy DEMO CIRCLES !!
+    if (addr === '/2/multitoggle/1/5') showCoreEnergyDemo = val === 1 // DEMO Circles
     if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 //CoreEnergy
     if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 //atomNetBackground
     if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
+    if (addr === '/2/multitoggle/1/7') showSmokeCore = val === 1 //smokeCore
 
     // Debug log
     // console.log('OSC →', addr, val)
@@ -137,6 +156,9 @@ function setup() {
   })
   // Initialize CoreEnergy
   CoreEnergy_init()
+
+  // Initialize SmokeCore
+  SmokeCore_init()
 }
 
 function draw() {
@@ -175,11 +197,10 @@ function draw() {
     CoreEnergy_draw({ R: coreR, btnA, btnB, btnC })
   }
 
-  // --- Core (blue circle) driven by faderDEMO ---
+  // --- SIMPLE CIRCLES FORM driven by faderDEMO ---
   if (showCoreEnergyDemo) {
-    ///  SIMPLE CIRCLES FORM
     let coreRDemo = map(s3, 0, 1, 50, 300)
-    // Color override via buttons (momentary)
+    // Color override via buttons
     let col = color(100, 200, 255) // default blue
     if (btnADemo) col = color(255, 80, 80) // red
     if (btnBDemo) col = color(80, 255, 120) // green
@@ -187,8 +208,11 @@ function draw() {
 
     fill(col)
     ellipse(width / 2, height / 2, coreRDemo)
-    // const coreRDemo = map(s3, 0, 1, 50, 300)
-    // CoreEnergy_draw({ R: coreRDemo, btnADemo, btnBDemo, btnCDemo })
+  }
+  // --- Core Optimicering---
+  if (showSmokeCore) {
+    const radius = map(faderSmoke_size, 0, 1, 50, 350)
+    SmokeCore_draw({ R: radius, btnA_smoke, btnB_smoke, btnC_smoke })
   }
 
   // --- Atoms driven by fader2 (openness 0..1) ---
@@ -212,39 +236,45 @@ function draw() {
   // )
 }
 // -------------------- sound -------------------
-// async function unlockAudio() {
-//   try {
-//     // Desbloquear el contexto (userStartAudio es una función global de p5.sound)
-//     if (getAudioContext().state !== 'running') {
-//       await userStartAudio()
-//     }
+// Small shim so our unlockAudio() can call userStartAudio()
+// and resume the p5 sound audio context safely.
+async function userStartAudio() {
+  // If p5.sound exposes getAudioContext (normal case)
+  if (typeof getAudioContext === 'function') {
+    const ctx = getAudioContext()
+    if (ctx && ctx.state !== 'running') {
+      await ctx.resume()
+    }
+  } else {
+    // Fallback: try to resume a generic AudioContext
+    const ACtx = window.AudioContext || window.webkitAudioContext
+    if (!ACtx) return
+    if (!window.__manualAudioCtx) {
+      window.__manualAudioCtx = new ACtx()
+    }
+    const ctx = window.__manualAudioCtx
+    if (ctx.state !== 'running') {
+      await ctx.resume()
+    }
+  }
+}
 
-//     // Reproducir la música si está cargada y no está sonando
-//     if (window.bgMusic && !window.bgMusic.isPlaying()) {
-//       window.bgMusic.setVolume(0)
-//       window.bgMusic.loop()
-//       // Fade-in suave
-//       window.bgMusic.fade(0.6, 1200) // p5.sound.fade(targetVolume, duration)
-//     }
-//   } catch (e) {
-//     console.warn('coundt start audio:', e)
-//   }
-// }
 async function unlockAudio() {
   try {
-    // Desbloquear el contexto
-    if (getAudioContext().state !== 'running') {
-      await userStartAudio()
-    }
+    // Unlock context
+    // if (getAudioContext().state !== 'running') {
+    //   await userStartAudio()
+    // }
+    await userStartAudio()
 
-    // Reproducir la música si está cargada y no está sonando
+    // Play the music if it is loaded and not playing
     if (window.bgMusic && !window.bgMusic.isPlaying()) {
-      // Establecer el volumen inicial al valor del fader
+      // Set the initial volume to the fader value
       window.bgMusic.setVolume(faderVolume)
       window.bgMusic.loop()
     }
   } catch (e) {
-    console.warn('Cant iniciate audio:', e)
+    console.warn('cannot initiate audio:', e)
   }
 }
 // -------------------- Visuals --------------------
@@ -344,5 +374,6 @@ function CoreEnergy_resize() {
 
 function windowResized() {
   resizeCanvas(windowWidth, windowHeight)
-  if (typeof CoreEnergy_resize === 'function') CoreEnergy_resize()
+  CoreEnergy_resize()
+  SmokeCore_resize()
 }
