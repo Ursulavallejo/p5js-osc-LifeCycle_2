@@ -1,4 +1,4 @@
-// version: particles and smoke-like core sphere
+// version: particles and smoke-like core sphere  + treble halo sparks
 ;(function (global) {
   const ThreeCore = {}
 
@@ -8,12 +8,200 @@
 
   let isVisible = false
   let clock = null
+  let lastTime = 0 // for dt in sparks
 
   // uniforms for the core sphere shader
   let coreUniforms = null
   let coreSpinSpeed = 0.002 // base rotation speed (can be audio-reactive)
 
   const PARTICLE_COUNT = 4500
+
+  //   HALO SPARKS
+  const MAX_SPARKS = 100
+  let sparkGeo = null
+  let sparkMat = null
+  let sparkSystem = null
+  let sparkPositions = null
+  let sparkAges = null
+  let sparkLifes = null
+  const sparks = [] // { alive, vx, vy, vz }
+
+  // create small yellowish sparks around the sphere
+  function createHaloSparks(THREE) {
+    sparkGeo = new THREE.BufferGeometry()
+    sparkPositions = new Float32Array(MAX_SPARKS * 3)
+    sparkAges = new Float32Array(MAX_SPARKS)
+    sparkLifes = new Float32Array(MAX_SPARKS)
+
+    for (let i = 0; i < MAX_SPARKS; i++) {
+      sparks.push({
+        alive: false,
+        vx: 0,
+        vy: 0,
+        vz: 0,
+      })
+      // collapsed at origin by default (not visible)
+      sparkPositions[i * 3] = 0
+      sparkPositions[i * 3 + 1] = 0
+      sparkPositions[i * 3 + 2] = 0
+
+      //life = 0 => shader consider them invisibles
+      sparkAges[i] = 0
+      sparkLifes[i] = 0
+    }
+
+    sparkGeo.setAttribute(
+      'position',
+      new THREE.BufferAttribute(sparkPositions, 3)
+    )
+    sparkGeo.setAttribute('aAge', new THREE.BufferAttribute(sparkAges, 1))
+    sparkGeo.setAttribute('aLife', new THREE.BufferAttribute(sparkLifes, 1))
+
+    const sparkVertexShader = /* glsl */ `
+  attribute float aAge;
+  attribute float aLife;
+  varying float vAlpha;
+
+  void main() {
+    // alive = 0 si life < 0.001, sino 1
+    float alive = step(0.001, aLife);
+
+    float life = max(aLife, 0.0001);
+    float k = clamp(aAge / life, 0.0, 1.0); // 0 = birth, 1 = death
+
+    // si está muerto (alive = 0) => alpha 0
+    vAlpha = (1.0 - k) * alive;
+
+    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    float baseSize = 10.0 * (1.0 - 0.3 * k) * (300.0 / -mvPosition.z);
+
+    // tamaño también 0 si está muerto
+    gl_PointSize = max(baseSize * alive, 0.0);
+
+    gl_Position = projectionMatrix * mvPosition;
+  }
+`
+
+    const sparkFragmentShader = /* glsl */ `
+      uniform vec3 uColor;
+      varying float vAlpha;
+
+      void main() {
+        // circular mask (so sparks are round)
+        vec2 uv = gl_PointCoord * 2.0 - 1.0;
+        float d = dot(uv, uv);
+        float mask = smoothstep(1.0, 0.6, d);
+        float alpha = vAlpha * mask;
+
+        if (alpha <= 0.01) discard;
+
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `
+
+    sparkMat = new THREE.ShaderMaterial({
+      uniforms: {
+        // warm yellow, Genesis-style
+        uColor: { value: new THREE.Color(1.0, 0.95, 0.55) },
+      },
+      vertexShader: sparkVertexShader,
+      fragmentShader: sparkFragmentShader,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    })
+
+    sparkSystem = new THREE.Points(sparkGeo, sparkMat)
+    scene.add(sparkSystem)
+  }
+
+  // spawn new sparks on a shell just outside the sphere
+  function emitSparks(count, energy, tre) {
+    if (!sparkGeo || count <= 0) return
+
+    count = Math.min(count, MAX_SPARKS)
+
+    for (let k = 0; k < count; k++) {
+      // find a free slot
+      let idx = -1
+      for (let i = 0; i < MAX_SPARKS; i++) {
+        if (!sparks[i].alive) {
+          idx = i
+          break
+        }
+      }
+      if (idx === -1) break
+
+      const baseR = 1.7 // slightly outside your 1.4 core
+      const extra = 0.5 + 0.6 * energy
+      const radius = baseR + Math.random() * extra
+
+      // direction on sphere, slightly biased to equator (halo belt)
+      const u = Math.random() * 0.6 - 0.3 // [-0.3, 0.3]
+      const phi = Math.random() * Math.PI * 2
+      const sint = Math.sqrt(1 - u * u)
+      const dx = sint * Math.cos(phi)
+      const dy = u
+      const dz = sint * Math.sin(phi)
+
+      sparkPositions[idx * 3] = dx * radius
+      sparkPositions[idx * 3 + 1] = dy * radius
+      sparkPositions[idx * 3 + 2] = dz * radius
+
+      const speed = 0.9 + 2.0 * tre + 0.6 * energy
+      sparks[idx].vx = dx * speed
+      sparks[idx].vy = dy * speed
+      sparks[idx].vz = dz * speed
+      sparks[idx].alive = true
+
+      const life = 0.4 + Math.random() * 0.5
+      sparkAges[idx] = 0
+      sparkLifes[idx] = life
+    }
+
+    sparkGeo.attributes.position.needsUpdate = true
+    sparkGeo.attributes.aAge.needsUpdate = true
+    sparkGeo.attributes.aLife.needsUpdate = true
+  }
+
+  // advance sparks positions and fade them out
+  function updateSparks(dt) {
+    if (!sparkGeo || dt <= 0) return
+
+    let anyChange = false
+
+    for (let i = 0; i < MAX_SPARKS; i++) {
+      if (!sparks[i].alive) continue
+
+      sparkAges[i] += dt
+      const life = sparkLifes[i]
+
+      if (sparkAges[i] >= life) {
+        sparks[i].alive = false
+
+        sparkPositions[i * 3] = 0
+        sparkPositions[i * 3 + 1] = 0
+        sparkPositions[i * 3 + 2] = 0
+        //  we make the invisibles-attributes
+        sparkLifes[i] = 0.0
+        sparkAges[i] = 0.0
+
+        anyChange = true
+        continue
+      }
+
+      sparkPositions[i * 3] += sparks[i].vx * dt
+      sparkPositions[i * 3 + 1] += sparks[i].vy * dt
+      sparkPositions[i * 3 + 2] += sparks[i].vz * dt
+      anyChange = true
+    }
+
+    if (anyChange) {
+      sparkGeo.attributes.position.needsUpdate = true
+      sparkGeo.attributes.aAge.needsUpdate = true
+      sparkGeo.attributes.aLife.needsUpdate = true
+    }
+  }
 
   //   CORE SPHERE WITH SMOKE SHADER
 
@@ -320,16 +508,20 @@
     dir.position.set(3, 3, 5)
     scene.add(dir)
 
-    // Order matters: core first (so coreUniforms is ready), then particles
+    // Order matters: core first (so coreUniforms is ready), then particles→ halo sparks
     createCoreMesh(THREE)
     createSurfaceParticles(THREE)
+    createHaloSparks(THREE)
 
     clock = new THREE.Clock()
+    lastTime = 0
 
     renderer.setAnimationLoop(() => {
       if (!isVisible) return
 
       const t = clock.getElapsedTime()
+      const dt = t - lastTime
+      lastTime = t
 
       if (coreUniforms) {
         coreUniforms.uTime.value = t
@@ -342,7 +534,8 @@
         // coreMesh.rotation.y += 0.002
         coreMesh.rotation.y += coreSpinSpeed
       }
-
+      // halo sparks time update
+      updateSparks(dt)
       renderer.render(scene, camera)
     })
   }
@@ -368,6 +561,9 @@
       }
       if (particleSystem) {
         particleSystem.scale.set(radius, radius, radius)
+      }
+      if (sparkSystem) {
+        sparkSystem.scale.set(radius, radius, radius)
       }
     }
 
@@ -405,6 +601,14 @@
 
       // Rotation speed: bass controls how fast the core spins
       coreSpinSpeed = 0.002 + 0.01 * bass
+
+      //  treble-driven halo sparks, inspired by Genesis outer halo
+      if (sparkGeo && tre > 0.18) {
+        const treBoost = tre - 0.18
+        const basePerFrame = 40 // tweak if too many/few
+        const count = Math.floor(basePerFrame * treBoost)
+        emitSparks(count, energy, tre)
+      }
     }
   }
 
