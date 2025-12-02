@@ -1,203 +1,255 @@
+// version: particles and smoke-like core sphere
 ;(function (global) {
   const ThreeCore = {}
 
   let scene, camera, renderer
   let coreMesh, particleSystem
   let particleGeo, particleMat
-  let basePositions = []
 
-  let noise = null
   let isVisible = false
   let clock = null
 
+  // uniforms for the core sphere shader
+  let coreUniforms = null
+  let coreSpinSpeed = 0.002 // base rotation speed (can be audio-reactive)
+
   const PARTICLE_COUNT = 4500
 
-  // --- Simplex Noise  ---
-  class SimplexNoise {
-    constructor() {
-      this.grad3 = new Float32Array([
-        1, 1, 0, -1, 1, 0, 1, -1, 0, -1, -1, 0, 1, 0, 1, -1, 0, 1, 1, 0, -1, -1,
-        0, -1,
-      ])
-      this.p = new Uint8Array(256)
-      for (let i = 0; i < 256; i++) this.p[i] = (Math.random() * 256) | 0
-      this.perm = new Uint8Array(512)
-      for (let i = 0; i < 512; i++) this.perm[i] = this.p[i & 255]
-    }
-
-    noise3d(xin, yin, zin) {
-      let n0, n1, n2, n3
-      const F3 = 1 / 3
-      const s = (xin + yin + zin) * F3
-      const i = Math.floor(xin + s)
-      const j = Math.floor(yin + s)
-      const k = Math.floor(zin + s)
-
-      const G3 = 1 / 6
-      const t = (i + j + k) * G3
-      const X0 = i - t
-      const Y0 = j - t
-      const Z0 = k - t
-      const x0 = xin - X0
-      const y0 = yin - Y0
-      const z0 = zin - Z0
-
-      let i1, j1, k1
-      let i2, j2, k2
-
-      if (x0 >= y0) {
-        if (y0 >= z0) {
-          i1 = 1
-          j1 = 0
-          k1 = 0
-          i2 = 1
-          j2 = 1
-          k2 = 0
-        } else if (x0 >= z0) {
-          i1 = 1
-          j1 = 0
-          k1 = 0
-          i2 = 1
-          j2 = 0
-          k2 = 1
-        } else {
-          i1 = 0
-          j1 = 0
-          k1 = 1
-          i2 = 1
-          j2 = 0
-          k2 = 1
-        }
-      } else {
-        if (y0 < z0) {
-          i1 = 0
-          j1 = 0
-          k1 = 1
-          i2 = 0
-          j2 = 1
-          k2 = 1
-        } else if (x0 < z0) {
-          i1 = 0
-          j1 = 1
-          k1 = 0
-          i2 = 0
-          j2 = 1
-          k2 = 1
-        } else {
-          i1 = 0
-          j1 = 1
-          k1 = 0
-          i2 = 1
-          j2 = 1
-          k2 = 0
-        }
-      }
-
-      const x1 = x0 - i1 + G3
-      const y1 = y0 - j1 + G3
-      const z1 = z0 - k1 + G3
-      const x2 = x0 - i2 + 2 * G3
-      const y2 = y0 - j2 + 2 * G3
-      const z2 = z0 - k2 + 2 * G3
-      const x3 = x0 - 1 + 3 * G3
-      const y3 = y0 - 1 + 3 * G3
-      const z3 = z0 - 1 + 3 * G3
-
-      const ii = i & 255
-      const jj = j & 255
-      const kk = k & 255
-
-      const gi0 = this.perm[ii + this.perm[jj + this.perm[kk]]] % 12
-      const gi1 =
-        this.perm[ii + i1 + this.perm[jj + j1 + this.perm[kk + k1]]] % 12
-      const gi2 =
-        this.perm[ii + i2 + this.perm[jj + j2 + this.perm[kk + k2]]] % 12
-      const gi3 = this.perm[ii + 1 + this.perm[jj + 1 + this.perm[kk + 1]]] % 12
-
-      const g = this.grad3
-
-      let t0 = 0.6 - x0 * x0 - y0 * y0 - z0 * z0
-      if (t0 < 0) n0 = 0
-      else {
-        t0 *= t0
-        n0 =
-          t0 *
-          t0 *
-          (g[gi0 * 3] * x0 + g[gi0 * 3 + 1] * y0 + g[gi0 * 3 + 2] * z0)
-      }
-
-      let t1 = 0.6 - x1 * x1 - y1 * y1 - z1 * z1
-      if (t1 < 0) n1 = 0
-      else {
-        t1 *= t1
-        n1 =
-          t1 *
-          t1 *
-          (g[gi1 * 3] * x1 + g[gi1 * 3 + 1] * y1 + g[gi1 * 3 + 2] * z1)
-      }
-
-      let t2 = 0.6 - x2 * x2 - y2 * y2 - z2 * z2
-      if (t2 < 0) n2 = 0
-      else {
-        t2 *= t2
-        n2 =
-          t2 *
-          t2 *
-          (g[gi2 * 3] * x2 + g[gi2 * 3 + 1] * y2 + g[gi2 * 3 + 2] * z2)
-      }
-
-      let t3 = 0.6 - x3 * x3 - y3 * y3 - z3 * z3
-      if (t3 < 0) n3 = 0
-      else {
-        t3 *= t3
-        n3 =
-          t3 *
-          t3 *
-          (g[gi3 * 3] * x3 + g[gi3 * 3 + 1] * y3 + g[gi3 * 3 + 2] * z3)
-      }
-
-      return 32 * (n0 + n1 + n2 + n3)
-    }
-  }
-
-  function deformCoreGeometry(time) {
-    const positions = coreMesh.geometry.attributes.position.array
-    const normals = coreMesh.geometry.attributes.normal.array
-
-    for (let i = 0; i < positions.length; i += 3) {
-      const bx = basePositions[i]
-      const by = basePositions[i + 1]
-      const bz = basePositions[i + 2]
-
-      const nVal = noise.noise3d(bx * 0.6, by * 0.6, bz * 0.6 + time * 0.8)
-      const displacement = 0.25 * nVal
-
-      positions[i] = bx + normals[i] * displacement
-      positions[i + 1] = by + normals[i + 1] * displacement
-      positions[i + 2] = bz + normals[i + 2] * displacement
-    }
-
-    coreMesh.geometry.attributes.position.needsUpdate = true
-    coreMesh.geometry.computeVertexNormals()
-  }
+  //   CORE SPHERE WITH SMOKE SHADER
 
   function createCoreMesh(THREE) {
-    const geo = new THREE.SphereGeometry(1.4, 96, 96)
-    basePositions = geo.attributes.position.array.slice()
+    const geo = new THREE.SphereGeometry(1.4, 128, 128)
 
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x88bbdd,
-      roughness: 0.7,
-      metalness: 0.15,
+    coreUniforms = {
+      uTime: { value: 0 },
+      uNoiseScale: { value: 0.8 }, // how tight the noise pattern is
+      uDisplacementAmp: { value: 0.25 }, // how much the surface is displaced
+      uSmokeIntensity: { value: 0.8 }, // global smoke opacity multiplier
+      uBaseColor: { value: new THREE.Color(0x88bbdd) }, // core/particles color
+    }
+
+    const vertexShader = /* glsl */ `
+      varying vec3 vPos;
+      varying vec3 vNormal;
+
+      uniform float uTime;
+      uniform float uNoiseScale;
+      uniform float uDisplacementAmp;
+
+      // --- simplex noise 3D (compacto) ---
+      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec4 permute(vec4 x) { return mod289((x * 34.0 + 1.0) * x); }
+
+      float snoise(vec3 v) {
+        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+        vec3 i  = floor(v + dot(v, C.yyy));
+        vec3 x0 = v   - i + dot(i, C.xxx);
+
+        vec3 g = step(x0.yzx, x0.xyz);
+        vec3 l = 1.0 - g;
+        vec3 i1 = min( g.xyz, l.zxy );
+        vec3 i2 = max( g.xyz, l.zxy );
+
+        vec3 x1 = x0 - i1 + C.xxx;
+        vec3 x2 = x0 - i2 + C.yyy;
+        vec3 x3 = x0 - D.yyy;
+
+        i = mod289(i);
+        vec4 p = permute( permute( permute(
+                 i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+               + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+               + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+        float n_ = 1.0/7.0;
+        vec3  ns = n_ * D.wyz - D.xzx;
+
+        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+        vec4 x_ = floor(j * ns.z);
+        vec4 y_ = floor(j - 7.0 * x_ );
+
+        vec4 x = x_ *ns.x + ns.yyyy;
+        vec4 y = y_ *ns.x + ns.yyyy;
+        vec4 h = 1.0 - abs(x) - abs(y);
+
+        vec4 b0 = vec4( x.xy, y.xy );
+        vec4 b1 = vec4( x.zw, y.zw );
+
+        vec4 s0 = floor(b0)*2.0 + 1.0;
+        vec4 s1 = floor(b1)*2.0 + 1.0;
+        vec4 sh = -step(h, vec4(0.0));
+
+        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+        vec3 p0 = vec3(a0.xy,h.x);
+        vec3 p1 = vec3(a0.zw,h.y);
+        vec3 p2 = vec3(a1.xy,h.z);
+        vec3 p3 = vec3(a1.zw,h.w);
+
+        vec4 norm = inversesqrt(vec4(dot(p0,p0), dot(p1,p1),
+                                     dot(p2,p2), dot(p3,p3)));
+        p0 *= norm.x;
+        p1 *= norm.y;
+        p2 *= norm.z;
+        p3 *= norm.w;
+
+        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1),
+                                dot(x2,x2), dot(x3,x3)), 0.0);
+        m = m * m;
+        return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1),
+                                      dot(p2,x2), dot(p3,x3) ) );
+      }
+
+      float fbm(vec3 p) {
+        float f = 0.0;
+        float amp = 0.5;
+        for (int i = 0; i < 5; i++) {
+          f += amp * snoise(p);
+          p *= 2.0;
+          amp *= 0.5;
+        }
+        return f;
+      }
+
+      void main() {
+        vec3 p = position;
+
+   // sample noise in object space and displace along the normal
+        float n = fbm(p * uNoiseScale + vec3(0.0, 0.0, uTime * 0.15));
+        float disp = n * uDisplacementAmp;
+
+        vec3 displaced = p + normal * disp;
+
+        vPos = displaced;
+        vNormal = normalize(normalMatrix * normal);
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
+      }
+    `
+
+    const fragmentShader = /* glsl */ `
+      varying vec3 vPos;
+      varying vec3 vNormal;
+
+      uniform float uTime;
+      uniform float uSmokeIntensity;
+      uniform vec3 uBaseColor;
+
+      vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+      vec4 permute(vec4 x) { return mod289((x * 34.0 + 1.0) * x); }
+
+      float snoise(vec3 v) {
+        const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+        const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+
+        vec3 i  = floor(v + dot(v, C.yyy));
+        vec3 x0 = v   - i + dot(i, C.xxx);
+
+        vec3 g = step(x0.yzx, x0.xyz);
+        vec3 l = 1.0 - g;
+        vec3 i1 = min( g.xyz, l.zxy );
+        vec3 i2 = max( g.xyz, l.zxy );
+
+        vec3 x1 = x0 - i1 + C.xxx;
+        vec3 x2 = x0 - i2 + C.yyy;
+        vec3 x3 = x0 - D.yyy;
+
+        i = mod289(i);
+        vec4 p = permute( permute( permute(
+                 i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+               + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+               + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+        float n_ = 1.0/7.0;
+        vec3  ns = n_ * D.wyz - D.xzx;
+
+        vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+
+        vec4 x_ = floor(j * ns.z);
+        vec4 y_ = floor(j - 7.0 * x_ );
+
+        vec4 x = x_ *ns.x + ns.yyyy;
+        vec4 y = y_ *ns.x + ns.yyyy;
+        vec4 h = 1.0 - abs(x) - abs(y);
+
+        vec4 b0 = vec4( x.xy, y.xy );
+        vec4 b1 = vec4( x.zw, y.zw );
+
+        vec4 s0 = floor(b0)*2.0 + 1.0;
+        vec4 s1 = floor(b1)*2.0 + 1.0;
+        vec4 sh = -step(h, vec4(0.0));
+
+        vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+        vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+        vec3 p0 = vec3(a0.xy,h.x);
+        vec3 p1 = vec3(a0.zw,h.y);
+        vec3 p2 = vec3(a1.xy,h.z);
+        vec3 p3 = vec3(a1.zw,h.w);
+
+        vec4 norm = inversesqrt(vec4(dot(p0,p0), dot(p1,p1),
+                                     dot(p2,p2), dot(p3,p3)));
+        p0 *= norm.x;
+        p1 *= norm.y;
+        p2 *= norm.z;
+        p3 *= norm.w;
+
+        vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1),
+                                dot(x2,x2), dot(x3,x3)), 0.0);
+        m = m * m;
+        return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1),
+                                      dot(p2,x2), dot(p3,x3) ) );
+      }
+
+      float fbm(vec3 p) {
+        float f = 0.0;
+        float amp = 0.5;
+        for (int i = 0; i < 5; i++) {
+          f += amp * snoise(p);
+          p *= 2.0;
+          amp *= 0.5;
+        }
+        return f;
+      }
+
+      void main() {
+        // volumetric-like noise inside the core
+        float n = fbm(vPos * 0.9 + vec3(0.0, 0.0, uTime * 0.1));
+        n = clamp(n * 0.5 + 0.5, 0.0, 1.0);
+
+       // control smoke holes
+        float alpha = smoothstep(0.25, 0.8, n) * uSmokeIntensity;
+
+        // Fresnel-like rim lighting
+        float viewDot = max(dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 0.0);
+        float fresnel = pow(1.0 - viewDot, 2.0);
+
+        // Smoke color
+        vec3 smokeColor = mix(uBaseColor * 0.4, vec3(1.0), n);
+        smokeColor += fresnel * 0.6;
+
+        gl_FragColor = vec4(smokeColor, alpha);
+      }
+    `
+
+    const mat = new THREE.ShaderMaterial({
+      uniforms: coreUniforms,
+      vertexShader,
+      fragmentShader,
       transparent: true,
-      opacity: 0.85,
-      emissive: 0x0a0a0a,
-      emissiveIntensity: 0.4,
+      depthWrite: false,
     })
 
     coreMesh = new THREE.Mesh(geo, mat)
     scene.add(coreMesh)
   }
+
+  //   SURFACE PARTICLES
 
   function createSurfaceParticles(THREE) {
     particleGeo = new THREE.BufferGeometry()
@@ -208,7 +260,7 @@
       const cost = Math.random() * 2 - 1
       const sint = Math.sqrt(1 - cost * cost)
 
-      const r = 1.4 + Math.random() * 0.1 // pegado a la esfera
+      const r = 1.4 + Math.random() * 0.1 // just above the sphere surface
       positions[i * 3] = r * sint * Math.cos(phi)
       positions[i * 3 + 1] = r * cost
       positions[i * 3 + 2] = r * sint * Math.sin(phi)
@@ -232,11 +284,11 @@
     scene.add(particleSystem)
   }
 
+  //   INIT
+
   ThreeCore.init = function () {
     const THREE = global.THREE
     if (!THREE) return console.error('THREE not loaded')
-
-    noise = new SimplexNoise()
 
     renderer = new THREE.WebGLRenderer({
       alpha: true,
@@ -268,6 +320,7 @@
     dir.position.set(3, 3, 5)
     scene.add(dir)
 
+    // Order matters: core first (so coreUniforms is ready), then particles
     createCoreMesh(THREE)
     createSurfaceParticles(THREE)
 
@@ -278,22 +331,37 @@
 
       const t = clock.getElapsedTime()
 
-      deformCoreGeometry(t, THREE)
+      if (coreUniforms) {
+        coreUniforms.uTime.value = t
+      }
 
-      particleSystem.rotation.y += 0.001
-      coreMesh.rotation.y += 0.002
+      if (particleSystem) {
+        particleSystem.rotation.y += 0.001
+      }
+      if (coreMesh) {
+        // coreMesh.rotation.y += 0.002
+        coreMesh.rotation.y += coreSpinSpeed
+      }
 
       renderer.render(scene, camera)
     })
   }
 
+  //   VISIBILITY TOGGLE
+
   ThreeCore.setVisible = function (flag) {
     isVisible = !!flag
-    renderer.domElement.style.display = isVisible ? 'block' : 'none'
+    if (renderer && renderer.domElement) {
+      renderer.domElement.style.display = isVisible ? 'block' : 'none'
+    }
   }
 
-  ThreeCore.update = function ({ radius, color }) {
-    // Fader: center + particles
+  //   EXTERNAL UPDATES (OSC, UI, etc.)
+
+  ThreeCore.update = function (params = {}) {
+    const { radius, color, audio } = params
+
+    // Radius from UI / OSC fader
     if (radius != null) {
       if (coreMesh) {
         coreMesh.scale.set(radius, radius, radius)
@@ -303,22 +371,47 @@
       }
     }
 
-    // buttons A/B/C: change color
+    // Tint from A/B/C buttons
     if (color) {
       const r = color.r / 255
       const g = color.g / 255
       const b = color.b / 255
 
-      if (coreMesh && coreMesh.material) {
-        coreMesh.material.color.setRGB(r, g, b)
+      if (coreUniforms && coreUniforms.uBaseColor) {
+        coreUniforms.uBaseColor.value.setRGB(r, g, b)
       }
       if (particleMat) {
         particleMat.color.setRGB(r, g, b)
       }
     }
+
+    // --- Audio-reactive mapping (bass/mid/tre from Processing mic) ---
+    if (audio && coreUniforms) {
+      const bass = Math.max(0, audio.bass || 0)
+      const mid = Math.max(0, audio.mid || 0)
+      const tre = Math.max(0, audio.tre || 0)
+
+      const energy = Math.max(0, Math.min(1, (bass + mid + tre) / 3))
+
+      // More treble + overall energy → stronger smoke / glow
+      coreUniforms.uSmokeIntensity.value = 0.5 + 1.0 * energy
+
+      // Surface displacement driven mainly by mids (detail) + some bass (weight)
+      const deformMix = 0.6 * mid + 0.4 * bass
+      coreUniforms.uDisplacementAmp.value = 0.2 + 0.3 * deformMix
+
+      // Pattern detail: mids make the noise more detailed
+      coreUniforms.uNoiseScale.value = 0.8 + 0.7 * mid
+
+      // Rotation speed: bass controls how fast the core spins
+      coreSpinSpeed = 0.002 + 0.01 * bass
+    }
   }
 
+  //   RESIZE HANDLER
+
   ThreeCore.resize = function () {
+    if (!camera || !renderer) return
     const w = global.innerWidth
     const h = global.innerHeight
     camera.aspect = w / h

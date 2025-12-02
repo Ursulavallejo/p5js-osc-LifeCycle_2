@@ -1,9 +1,10 @@
-// === TouchOSC Beatmachine Mk2 → p5.js ( faders +  buttons) ===
+// === TouchOSC Beatmachine Mk2 → p5.js ( faders +  buttons) ===
 // fader1: controls CoreEnergy radius (smoke moon size)
 // fader2: controls Atoms openness (0..1)
 // faderVolume: controls Background Music Volume (0..1)
 // faderThree: controls CoreEnergy Three size
 // buttons A/B/C: CoreEnergy tint overrides (Burgundy/Turquoise/Yellow) // Same Three
+
 window.bgMusic = null
 let socket
 
@@ -16,10 +17,18 @@ let fader2 = 0 // 0..1  (atoms openness)
 let btnA = 0, // Core Energy
   btnB = 0,
   btnC = 0
-//Three js Core
+// Three js Core
 let btnAThree = 0,
   btnBThree = 0,
   btnCThree = 0
+
+// --- Audio from Processing /uv/eq (mic) ---
+let micBass = 0
+let micMid = 0
+let micTre = 0
+
+// smoothing for mic values
+const MIC_SMOOTH = 0.25
 
 // toggle state to show/hide
 // Convention: 1 → show, 0 → hide
@@ -27,7 +36,7 @@ let showIntro = false
 let showAtoms = false // true: draw atoms, false: hide atoms
 let showAtomsNestBackground = false
 let showCoreEnergy = false
-let showCoreEnergyThree = false //Three js
+let showCoreEnergyThree = false // Three js
 
 // Smoothing for nicer motion
 let s1 = 0,
@@ -35,21 +44,22 @@ let s1 = 0,
   s3 = 0
 const ALPHA = 0.25
 
-// Particles for a tiny "bloom puff" when  tapped
+// Particles for a tiny "bloom puff" when tapped
 let particles = []
 let puffT = 0
 
-//Intro
+// Intro
 let img
 let bgMusic
 
-// CoreEnergy
+// -------------------- preload --------------------
 function preload() {
   CoreEnergy_preload('./assets/texture.png')
   soundFormats('mp3', 'wav', 'ogg')
   window.bgMusic = loadSound('./assets/metamorphosis-experimental.mp3')
 }
 
+// -------------------- setup --------------------
 function setup() {
   createCanvas(windowWidth, windowHeight)
 
@@ -64,94 +74,110 @@ function setup() {
 
   // Let the bridge know the OSC ports (server = bridge listens; client = bridge sends back)
   socket.emit('config', {
-    server: { host: '0.0.0.0', port: 12000 },
-    client: { host: '127.0.0.1', port: 8000 },
+    server: { host: '0.0.0.0', port: 12000 }, // TouchOSC → bridge
+    client: { host: '127.0.0.1', port: 9000 }, // optional OSC OUT (not used now)
   })
 
   socket.on('connected', (ok) => console.log('Bridge connected?', ok))
 
-  // Map TouchOSC messages → our variables
-  socket.on('message', (msg) => {
-    console.log('📩 OSC →', msg)
-    // msg shape: ['/addr', value]
-    const [addr, valRaw] = msg
-    const val = Number(valRaw)
+  // TouchOSC messages → our variables
+  socket.on('message', handleOscMessage)
 
-    // Intro ON/OFF desde TouchOSC (1 = ON, 0 = OFF)
-    if (addr === '/2/multitoggle/1/1') {
-      showIntro = val === 1
-      if (showIntro) {
-        if (typeof Intro_reset === 'function') Intro_reset()
-      } else {
-        if (typeof Intro_skip === 'function') Intro_skip()
-      }
-    }
+  // Mic audio from Processing: /uv/eq [bass, mid, tre]
+  socket.on('osc-eq', onOscEq)
 
-    // Faders
-
-    // fader Three.js
-    if (addr === '/2/multifader/5') faderThree = constrain(val, 0, 1)
-    // fader CoreEnergy
-    if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
-    // atoms movement
-    if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
-    // Sound
-    if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
-    // Three.js
-
-    //Toogles
-    // Three CORE !!Handle  A / B / C  Toogle change color CoreEnergy Three.js
-    if (addr === '/2/multitoggle/3/5') btnAThree = val
-    if (addr === '/2/multitoggle/4/5') btnBThree = val
-    if (addr === '/2/multitoggle/5/5') btnCThree = val
-
-    // Handle  A / B / C  Toogle change color CoreEnergy
-    if (addr === '/2/multitoggle/3/3') btnA = val
-    if (addr === '/2/multitoggle/4/3') btnB = val
-    if (addr === '/2/multitoggle/5/3') btnC = val
-
-    // Small puff when 1 is pressed
-    if (addr === '/2/led1' && val === 1) {
-      particles = makeParticles(320)
-      puffT = 0
-    }
-
-    // Toogles show/hide Atoms and atomNetBackground
-    // hide when 0, show when 1
-
-    if (addr === '/2/multitoggle/1/5') {
-      showCoreEnergyThree = val === 1 // Three.js core ON/OFF
-
-      if (window.ThreeCore && window.ThreeCore.setVisible) {
-        window.ThreeCore.setVisible(showCoreEnergyThree)
-      }
-    }
-
-    if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 //CoreEnergy
-    if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 //atomNetBackground
-    if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 //atoms
-
-    // Debug log
-    // console.log('OSC →', addr, val)
-  })
-
-  // Initialize intro (you can pass a texture path or let it auto-generate one)
+  // Initialize intro
   Intro_init({
     fontPath: './assets/MomoTrustDisplay.ttf',
-
     fadeSec: 3.5,
     holdSec: 2.0,
   })
-  // Initialize CoreEnergy
+
+  // Initialize CoreEnergy (2D smoke moon)
   CoreEnergy_init()
 
   // Initialize Three.js sphere (ThreeCore), start hidden
   if (window.ThreeCore && window.ThreeCore.init) {
     window.ThreeCore.init()
-    window.ThreeCore.setVisible(false) // start hiden
+    window.ThreeCore.setVisible(false) // start hidden
   }
 }
 
+// -------------------- OSC handlers --------------------
+
+// TouchOSC → faders + toggles
+function handleOscMessage(msg) {
+  console.log('📩 OSC →', msg)
+  // msg shape: ['/addr', value]
+  const [addr, valRaw] = msg
+  const val = Number(valRaw)
+
+  // Intro ON/OFF desde TouchOSC (1 = ON, 0 = OFF)
+  if (addr === '/2/multitoggle/1/1') {
+    showIntro = val === 1
+    if (showIntro) {
+      if (typeof Intro_reset === 'function') Intro_reset()
+    } else {
+      if (typeof Intro_skip === 'function') Intro_skip()
+    }
+  }
+
+  // Faders
+  // fader Three.js
+  if (addr === '/2/multifader/5') faderThree = constrain(val, 0, 1)
+  // fader CoreEnergy
+  if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
+  // atoms movement
+  if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
+  // Sound volume
+  if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
+
+  // Toggles A/B/C Three.js core color
+  if (addr === '/2/multitoggle/3/5') btnAThree = val
+  if (addr === '/2/multitoggle/4/5') btnBThree = val
+  if (addr === '/2/multitoggle/5/5') btnCThree = val
+
+  // Toggles A/B/C CoreEnergy (2D)
+  if (addr === '/2/multitoggle/3/3') btnA = val
+  if (addr === '/2/multitoggle/4/3') btnB = val
+  if (addr === '/2/multitoggle/5/3') btnC = val
+
+  // Small puff when 1 is pressed
+  if (addr === '/2/led1' && val === 1) {
+    particles = makeParticles(320)
+    puffT = 0
+  }
+
+  // Toggles show/hide Atoms and atomNetBackground + Three core
+  if (addr === '/2/multitoggle/1/5') {
+    showCoreEnergyThree = val === 1 // Three.js core ON/OFF
+    if (window.ThreeCore && window.ThreeCore.setVisible) {
+      window.ThreeCore.setVisible(showCoreEnergyThree)
+    }
+  }
+
+  if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 // CoreEnergy
+  if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 // atomNetBackground
+  if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 // atoms
+}
+
+// Processing → /uv/eq [bass, mid, tre]
+function onOscEq(pkt) {
+  if (!pkt || pkt.address !== '/uv/eq' || !pkt.args || pkt.args.length < 3) {
+    return
+  }
+
+  const bass = Number(pkt.args[0]) || 0
+  const mid = Number(pkt.args[1]) || 0
+  const tre = Number(pkt.args[2]) || 0
+
+  // extra smoothing on the p5 side (Processing already smooths a bit)
+  micBass = lerp(micBass, bass, MIC_SMOOTH)
+  micMid = lerp(micMid, mid, MIC_SMOOTH)
+  micTre = lerp(micTre, tre, MIC_SMOOTH)
+}
+
+// -------------------- draw --------------------
 function draw() {
   background(30)
 
@@ -168,13 +194,14 @@ function draw() {
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
     Intro_updateAndDraw(deltaTime / 1000)
-    // return
+    // no return: intro puede convivir con el resto si quieres
   }
 
   // --- Background: rotating molecular nest ---
   if (showAtomsNestBackground) {
     drawMolecularNestBackground(frameCount * 0.002)
   }
+
   // --- Optional puff particles when '/2/led1' is tapped ---
   if (particles.length) {
     puffT += deltaTime / 1000
@@ -188,19 +215,31 @@ function draw() {
     CoreEnergy_draw({ R: coreR, btnA, btnB, btnC })
   }
 
-  // --- Three.js Core driven by faderThree ---
+  // --- Three.js Core driven by faderThree + mic audio (Processing) ---
   if (showCoreEnergyThree && window.ThreeCore && window.ThreeCore.update) {
-    // Escala de radio para el mundo de Three.js
-    const radiusThree = map(s3, 0, 1, 0.8, 3.0)
+    // baseline radius from faderThree
+    const radiusBase = map(s3, 0, 1, 0.8, 3.0)
 
+    // overall audio energy (0..1)
+    const audioEnergy = constrain((micBass + micMid + micTre) / 3, 0, 1)
+
+    // let bass/energy gently “breathe” the sphere
+    const radiusReactive = radiusBase * (1.0 + 0.4 * audioEnergy)
+
+    // same color logic as before
     let rgb = { r: 100, g: 200, b: 255 } // blue default
     if (btnAThree) rgb = { r: 255, g: 80, b: 80 } // red
-    if (btnBThree) rgb = { r: 80, g: 255, b: 120 } // blue
+    if (btnBThree) rgb = { r: 80, g: 255, b: 120 } // greenish
     if (btnCThree) rgb = { r: 255, g: 255, b: 100 } // yellow
 
     window.ThreeCore.update({
-      radius: radiusThree,
+      radius: radiusReactive,
       color: rgb,
+      audio: {
+        bass: micBass,
+        mid: micMid,
+        tre: micTre,
+      },
     })
   }
 
@@ -209,40 +248,29 @@ function draw() {
     drawAtomsAtCenter(s2, frameCount * 0.02)
   }
 
-  // HUD
+  // HUD (opcional)
   fill(255)
   noStroke()
-
-  //DEBUG >>>
-  // text(
-  //   `fader1(core): ${nf(fader1, 1, 2)}   fader2(flower): ${nf(
-  //     fader2,
-  //     1,
-  //     2
-  //   )}   A:${btnA} B:${btnB} C:${btnC}`,
-  //   width / 2,
-  //   height - 28
-  // )
+  // text(`bass:${micBass.toFixed(2)} mid:${micMid.toFixed(2)} tre:${micTre.toFixed(2)}`,
+  //   width / 2, height - 28)
 }
-// -------------------- sound -------------------
 
+// -------------------- sound -------------------
 async function unlockAudio() {
   try {
-    // Desbloquear el contexto
     if (getAudioContext().state !== 'running') {
       await userStartAudio()
     }
 
-    // Reproducir la música si está cargada y no está sonando
     if (window.bgMusic && !window.bgMusic.isPlaying()) {
-      // Establecer el volumen inicial al valor del fader
       window.bgMusic.setVolume(faderVolume)
       window.bgMusic.loop()
     }
   } catch (e) {
-    console.warn('Cant iniciate audio:', e)
+    console.warn('Cant initiate audio:', e)
   }
 }
+
 // -------------------- Visuals --------------------
 
 // Simple Atoms that opens with p in [0..1]
@@ -250,7 +278,6 @@ function drawAtomsAtCenter(p, t) {
   push()
   translate(width / 2, height / 2)
 
-  // radius grows with p (ease for nicer feel)
   const radius = lerp(30, 140, easeOutCubic(p))
   const petals = 8
 
@@ -259,12 +286,10 @@ function drawAtomsAtCenter(p, t) {
     const px = radius * cos(a)
     const py = radius * sin(a)
 
-    // subtle animated color
     fill(255, 140 + 50 * sin(t + i), 180)
     ellipse(px, py, 40, 90)
   }
 
-  // core
   fill(255, 220, 120)
   circle(0, 0, lerp(30, 55, p))
   pop()
@@ -312,6 +337,7 @@ function makeParticles(n) {
   }
   return arr
 }
+
 function drawPuff(tp) {
   for (const pa of particles) {
     pa.x += pa.vx

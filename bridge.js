@@ -3,9 +3,6 @@
 // - Clear logs, better error handling, and graceful shutdown.
 // - Binds UDP server on 0.0.0.0 so TouchOSC on LAN can reach it.
 
-// ---------------------------
-// Imports
-// ---------------------------
 const http = require('http')
 const { Server } = require('socket.io')
 const osc = require('node-osc')
@@ -15,10 +12,15 @@ const os = require('os')
 // Config (env overridable)
 // ---------------------------
 const WS_PORT = Number(process.env.PORT || 8081)
+
+// OSC server/client for TouchOSC / generic OSC
 const DEFAULT_OSC_SERVER_HOST = process.env.OSC_SERVER_HOST || '0.0.0.0' // UDP IN (from TouchOSC)
 const DEFAULT_OSC_SERVER_PORT = Number(process.env.OSC_SERVER_PORT || 3333)
 const DEFAULT_OSC_CLIENT_HOST = process.env.OSC_CLIENT_HOST || '127.0.0.1' // UDP OUT (to Processing/DAW/etc.)
 const DEFAULT_OSC_CLIENT_PORT = Number(process.env.OSC_CLIENT_PORT || 3334)
+
+// Extra OSC server: Processing mic (Genesis EQ)
+const AUDIO_OSC_PORT = Number(process.env.AUDIO_OSC_PORT || 8000)
 
 // Optional: very-verbose OSC logging (set VERBOSE_OSC=1)
 const VERBOSE_OSC = process.env.VERBOSE_OSC === '1'
@@ -99,10 +101,6 @@ const httpServer = http.createServer((req, res) => {
 const io = new Server(httpServer, {
   // For local development, allow any origin. For production, restrict this.
   cors: { origin: '*' },
-  // transports: ['websocket', 'polling'], // <— habilita ambos
-  // allowUpgrades: true, // <— permite upgrade de polling→WS
-  // pingTimeout: 20000,
-  // pingInterval: 20000,
 })
 
 httpServer.listen(WS_PORT, () => {
@@ -128,7 +126,7 @@ httpServer.listen(WS_PORT, () => {
 })
 
 // ---------------------------
-// OSC server/client lifecycle
+// OSC server/client lifecycle (TouchOSC / generic)
 // ---------------------------
 let oscServer = null // receives from TouchOSC (UDP)
 let oscClient = null // sends to Processing/DAW/etc. (UDP)
@@ -179,6 +177,53 @@ setupOsc(
   DEFAULT_OSC_CLIENT_HOST,
   DEFAULT_OSC_CLIENT_PORT
 )
+
+// ---------------------------
+// Extra OSC server: Processing mic (Genesis EQ)
+// ---------------------------
+let audioServer = null
+
+function setupAudioOscServer() {
+  try {
+    audioServer && audioServer.kill()
+  } catch {}
+  audioServer = null
+
+  audioServer = new osc.Server(AUDIO_OSC_PORT, '0.0.0.0')
+  console.log(
+    `🎧 Audio OSC Server (Processing mic) listening on 0.0.0.0:${AUDIO_OSC_PORT}`
+  )
+
+  audioServer.on('message', (msg, rinfo) => {
+    // msg: [address, arg1, arg2, ...]
+    if (!Array.isArray(msg) || msg.length === 0) return
+    const [address, ...args] = msg
+
+    // Only forward EQ packets from Processing: /uv/eq [bass, mid, tre]
+    if (address === '/uv/eq') {
+      io.emit('osc-eq', { address, args })
+
+      if (VERBOSE_OSC) {
+        console.log(
+          `🎧 OSC EQ IN  ${rinfo.address}:${rinfo.port} → ${address} ` +
+            args.map((a) => JSON.stringify(a)).join(' ')
+        )
+      }
+    }
+
+    // Optional: forward dominant band if you want
+    // if (address === '/uv/dominant') {
+    //   io.emit('osc-dominant', { address, args })
+    // }
+  })
+
+  audioServer._sock &&
+    audioServer._sock.on('error', (err) => {
+      console.error('⚠️  Audio OSC Server socket error:', err.message)
+    })
+}
+
+setupAudioOscServer()
 
 // ---------------------------
 // Socket.IO handlers
@@ -262,6 +307,8 @@ io.on('connection', (socket) => {
         DEFAULT_OSC_CLIENT_HOST,
         DEFAULT_OSC_CLIENT_PORT
       )
+      // Nota: dejamos audioServer vivo para que Processing pueda seguir enviando,
+      // incluso si no hay clientes web conectados. Se cierra solo en shutdown().
     }
   })
 })
@@ -276,6 +323,9 @@ function shutdown(reason = 'shutdown') {
   } catch {}
   try {
     oscClient && oscClient.kill()
+  } catch {}
+  try {
+    audioServer && audioServer.kill()
   } catch {}
   try {
     io && io.close()
