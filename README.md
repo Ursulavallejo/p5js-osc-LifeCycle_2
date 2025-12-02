@@ -44,7 +44,13 @@ Browser → p5.js Visual Engine
 
 # 🚀 How to Run the Project
 
-## 1️⃣ Start the OSC Bridge
+## 1 Start Program Procesing >> And from the folder on the pc open the OSC file >>
+
+./life_cycle/osc/ProcessingOSC_Sound.pde
+
+You will see teh code of this file opened on processind and click start.
+
+## 2 Start the OSC Bridge
 
 Open a terminal **inside the `bridge` folder** and run:
 
@@ -75,7 +81,7 @@ Use that as **HOST** in TouchOSC.
 
 ---
 
-# TouchOSC Setup
+# 3 TouchOSC Setup
 
 Preset used → **Beatmachine Mk2 / Steps layer**
 
@@ -110,7 +116,7 @@ Preset used → **Beatmachine Mk2 / Steps layer**
 
 ---
 
-# 2️⃣ Start the Web Visualization
+# 4 Start the Web Visualization
 
 Launch the `index.html` with Live Server.
 
@@ -131,7 +137,7 @@ The bridge only works when the browser runs on `localhost`.
 
 ---
 
-# Audio System
+# Audio System on P5 - Background Sound
 
 - Browsers block audio autoplay.
 - The project includes a “Activate Sound” overlay to unlock audio.
@@ -152,3 +158,58 @@ The bridge only works when the browser runs on `localhost`.
 Each one can be toggled from TouchOSC.
 
 ---
+
+# **Audio → Visual Mapping **
+
+## Audio Input Breakdown
+
+| **Audio Range**                          | **Meaning**                                       | **Typical Values (Human Voice)** | **Controls in Three.js**                         | **Visual Effect on the Sphere**                                 |
+| ---------------------------------------- | ------------------------------------------------- | -------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- |
+| **BASS** (low frequencies)               | Plosives (“B”, “P”), deep tone, body of the voice | 0.05 – 0.25                      | `coreSpinSpeed`, part of `uDisplacementAmp`      | The sphere **rotates faster** and feels heavier, slight pulsing |
+| **MID** (mid frequencies)                | Most of the human voice, vowels, natural speech   | 0.10 – 0.40                      | `uNoiseScale` (noise detail), `uDisplacementAmp` | **Internal smoke** becomes more detailed, swirling turbulence   |
+| **TREBLE** (high frequencies)            | “S”, “SH”,louder speech, sharp consonants         | 0.18 – 0.60                      | **Halo Sparks** generation                       | Bright **outer sparks** activate in a ring around the sphere    |
+| **ENERGY** (average of bass + mid + tre) | Overall loudness and activity                     | 0.10 – 0.40                      | `uSmokeIntensity`                                | Core becomes more **glowing**, luminous, alive                  |
+
+---
+
+## 🔁 Signal Flow Overview
+
+```
+Human voice → Microphone → Processing (FFT)
+           → { bass, mid, tre } → OSC → Browser (WebSocket)
+           → ThreeCore.update({ audio })
+           → Real-time visual reaction in Three.js
+```
+
+---
+
+## How It Feels in Practice
+
+- **Normal speaking** →
+  Only the **inner smoke core** reacts: movement, glow, texture, rotation.
+
+- **High-frequency sounds (“sss”, louder speech)** →
+  The **yellow halo sparks** activate.
+
+- **Stronger speech or sharp peaks** →
+  Core glows brighter, rotates faster, and emits more sparks.
+
+- **Background music or far sounds** →
+  Not very reactive — the system is intentionally tuned for
+  **close, human-interaction sound**.
+
+---
+
+### **How the Audio Reactive System Works**
+
+The system uses a Processing sketch to capture microphone input, run FFT analysis, and extract three frequency bands: **bass**, **mid**, and **treble**.
+These normalized values are sent to the browser via OSC (using oscP5 → WebSocket bridge).
+
+In the browser, Three.js receives these values and animates the sphere:
+
+- **Bass** → increases rotation speed and adds weight to the deformation
+- **Mid** → enhances turbulence and noise detail of the smoke shader
+- **Treble** → triggers the bright halo sparks around the sphere
+- **Energy** (average) → increases smoke glow and internal luminosity
+
+This creates an interactive, voice-responsive visual designed for real-time human interaction.

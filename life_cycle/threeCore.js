@@ -603,9 +603,10 @@
       coreSpinSpeed = 0.002 + 0.01 * bass
 
       //  treble-driven halo sparks, inspired by Genesis outer halo
-      if (sparkGeo && tre > 0.18) {
-        const treBoost = tre - 0.18
-        const basePerFrame = 40 // tweak if too many/few
+      if (sparkGeo && tre > 0.4) {
+        //0.18
+        const treBoost = tre - 0.4 //higher umbral
+        const basePerFrame = 18 // 40 -tweak if too many/few
         const count = Math.floor(basePerFrame * treBoost)
         emitSparks(count, energy, tre)
       }
