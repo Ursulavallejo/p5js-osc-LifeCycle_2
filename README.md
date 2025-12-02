@@ -1,112 +1,118 @@
-## LifeCycle : Interactive MIDO ( p5.js + TouchOSC + OSC Bridge)
+## LifeCycle : Interactive MIDO ( p5.js + TouchOSC + OSC Bridge + Processing)
 
 **By Ursula Vallejo Janne**
 Creative coder · Visual artist · Interaction design experiments
 
 ## Concept
 
-**LifeCycle** is an audiovisual experiment that connects **TouchOSC (iPad/iPhone)** with **p5.js (web visuals)** using OSC transmitted through a custom Node.js bridge.
+**LifeCycle** is an audiovisual experiment connecting **TouchOSC (iPad/iPhone)** with **p5.js and Three.js web visuals** through OSC, using a custom **Node.js OSC bridge**.
+Processing captures the microphone input, performs FFT analysis, and sends the frequency data to sculpt the visuals in real time based on **human voice interaction**.
 
 The system simulates:
 
 - Molecular nests
 - Atom clusters
-- Energy cores
+- A voice-reactive energy core (Three.js)
 - Curl-noise smoke spheres
 - Color-shifting phases
-- A small particle “bloom puff”
+- A small particle “bloom puff” burst
 
-All components react in real time to TouchOSC controls, turning the interface into a kind of **instrument for sculpting cosmic molecules**.
-
----
-
-### Video:
+All components react to both audio and TouchOSC controls, turning the interface into an **instrument for shaping cosmic molecular structures**.
 
 ---
 
-### System Architecture
+## Video
+
+_(Add your link when ready)_
+
+---
+
+## System Architecture
 
 ```
-
 TouchOSC App (iPad/iPhone)
-↓ OSC
+        ↓   OSC
 Node.js Bridge (bridge.js)
-↓ Socket.IO
-Browser → p5.js Visual Engine
-
+        ↓   WebSockets
+Browser → p5.js / Three.js Visual Engine
 ```
 
 - TouchOSC sends OSC messages (faders, toggles, buttons).
-- `bridge.js` receives them and forwards them to the browser via WebSockets.
-- p5.js updates all visuals + background music volume.
+- `bridge.js` receives them and forwards to the browser via Socket.IO.
+- Processing sends FFT (bass/mid/tre) → OSC → browser.
+- p5.js & Three.js render all visuals.
 
 ---
 
 # 🚀 How to Run the Project
 
-## 1 Start Program Procesing >> And from the folder on the pc open the OSC file >>
+## 1. Start Processing
 
-./life_cycle/osc/ProcessingOSC_Sound.pde
+Open:
 
-You will see teh code of this file opened on processind and click start.
+```
+life_cycle/osc/ProcessingOSC_Sound.pde
+```
 
-## 2 Start the OSC Bridge
+Click **Run** in Processing.
 
-Open a terminal **inside the `bridge` folder** and run:
+This captures microphone input, performs FFT, and starts sending OSC.
+
+---
+
+## 2. Start the OSC Bridge
+
+Inside the `bridge` folder:
 
 ```bash
 node bridge.js
 ```
 
-Expected output:
+Expected:
 
 ```
 ✅ Socket.IO listening on http://localhost:8081
 ```
 
-To confirm your IP for TouchOSC:
+Find your IP for TouchOSC:
 
 ```bash
 ipconfig
 ```
 
-Look for:
-
-```
-Wireless LAN adapter Wi-Fi:
-IPv4 Address. . . .: 192.168.xx.xx
-```
-
-Use that as **HOST** in TouchOSC.
+Use your **IPv4 Address** as the TouchOSC HOST.
 
 ---
 
-# 3 TouchOSC Setup
+## 3. TouchOSC Setup
 
 Preset used → **Beatmachine Mk2 / Steps layer**
 
 ### Controls
 
 - **Toggle 1** → Show intro text
-- **Toggle 2** → Show molecular nest (background atoms)
-- **Toggle 3**
 
-  - Show CoreEnergy
-  - Buttons A/B/C → change color (red/green/yellow)
-  - Fader → CoreEnergy size
+- **Toggle 2** → Molecular nest (background atoms)
 
-- **Toggle 4**
+- **Toggle 3** →
 
-  - Show atom moleculs core
-  - Fader → open/close the atoms
+  - Show Energy Core
+  - Buttons A/B/C → color shifts
+  - Fader → energy core size
 
-- **Toggle 5**
+- **Toggle 4** →
+
+  - Show atomic molecules
+  - Fader → open/close atom cluster
+
+- **Toggle 5** →
 
   - Show demo circles
   - Fader → size
 
 - **Fader 6** → Background music volume
-- **Top round button** → Puff explosion (particle burst)
+
+- **Round button (top)** → Puff explosion (particle burst)
 
 ---
 
@@ -116,100 +122,87 @@ Preset used → **Beatmachine Mk2 / Steps layer**
 
 ---
 
-# 4 Start the Web Visualization
+## 4. Start the Web Visualization
 
-Launch the `index.html` with Live Server.
-
-⚠️ **Important:**
-Use this URL:
+Open:
 
 ```
 http://localhost:5500/index.html
 ```
 
-❌ Do **not** use the LAN version like:
-
-```
-http://192.168.x.x:5500/index.html
-```
-
-The bridge only works when the browser runs on `localhost`.
+⚠️ Must use **localhost**, not LAN IP.
 
 ---
 
-# Audio System on P5 - Background Sound
+# Audio System (p5.sound) Background Sound
 
-- Browsers block audio autoplay.
-- The project includes a “Activate Sound” overlay to unlock audio.
-- TouchOSC fader #6 controls volume in real time.
+- Browsers block autoplay → requires “Activate Sound” overlay
+- Fader #6 in TouchOSC controls volume live
 
 ---
 
 # Included Visual Modules
 
 - Intro text animation
-- CoreEnergy (particle vortex with tint overrides)
-- SmokeCore (optimized curl-noise smoke)
-- Atomic moleculs core
-- Molecular nest background
-- Particle puff explosion
-- Audio engine (p5.sound)
-
-Each one can be toggled from TouchOSC.
+- CoreEnergy (Three.js smoke + deformation + tint)
+- SmokeCore (curl-noise sphere)
+- Atomic molecules
+- Molecular nest
+- “Puff” particle explosion
+- Full audio engine (p5 + Processing FFT)
 
 ---
 
-# **Audio → Visual Mapping **
+# Audio → Visual Mapping
 
-## Audio Input Breakdown
+### Audio Input Breakdown
 
-| **Audio Range**                          | **Meaning**                                       | **Typical Values (Human Voice)** | **Controls in Three.js**                         | **Visual Effect on the Sphere**                                 |
-| ---------------------------------------- | ------------------------------------------------- | -------------------------------- | ------------------------------------------------ | --------------------------------------------------------------- |
-| **BASS** (low frequencies)               | Plosives (“B”, “P”), deep tone, body of the voice | 0.05 – 0.25                      | `coreSpinSpeed`, part of `uDisplacementAmp`      | The sphere **rotates faster** and feels heavier, slight pulsing |
-| **MID** (mid frequencies)                | Most of the human voice, vowels, natural speech   | 0.10 – 0.40                      | `uNoiseScale` (noise detail), `uDisplacementAmp` | **Internal smoke** becomes more detailed, swirling turbulence   |
-| **TREBLE** (high frequencies)            | “S”, “SH”,louder speech, sharp consonants         | 0.18 – 0.60                      | **Halo Sparks** generation                       | Bright **outer sparks** activate in a ring around the sphere    |
-| **ENERGY** (average of bass + mid + tre) | Overall loudness and activity                     | 0.10 – 0.40                      | `uSmokeIntensity`                                | Core becomes more **glowing**, luminous, alive                  |
+| Audio Band                    | Description              | Typical Values | Controls (Three.js)                         | Visual Result                                      |
+| ----------------------------- | ------------------------ | -------------- | ------------------------------------------- | -------------------------------------------------- |
+| **BASS** (low freqs)          | Plosives, deep tone      | 0.05–0.25      | `coreSpinSpeed`, part of `uDisplacementAmp` | Sphere rotates faster, feels heavier, soft pulsing |
+| **MID** (mid freqs)           | Most human voice         | 0.10–0.40      | `uNoiseScale`, `uDisplacementAmp`           | Internal smoke gets more detailed and turbulent    |
+| **TREBLE** (high freqs)       | “S”, “SH”, louder speech | 0.18–0.60      | **Halo sparks emission**                    | Yellow sparks in an outer ring                     |
+| **ENERGY** (avg of all bands) | Overall loudness         | 0.10–0.40      | `uSmokeIntensity`                           | Core becomes more luminous, glowing, alive         |
 
 ---
 
-## 🔁 Signal Flow Overview
+# Signal Flow
 
 ```
 Human voice → Microphone → Processing (FFT)
-           → { bass, mid, tre } → OSC → Browser (WebSocket)
-           → ThreeCore.update({ audio })
-           → Real-time visual reaction in Three.js
+           → { bass, mid, tre } → OSC → Bridge.js
+           → Browser (WebSocket) → ThreeCore.update()
+           → Real-time visual transformation
 ```
 
 ---
 
-## How It Feels in Practice
+# How It Feels in Practice
 
 - **Normal speaking** →
-  Only the **inner smoke core** reacts: movement, glow, texture, rotation.
+  Inner smoke reacts: swirling, deforming, glowing.
 
-- **High-frequency sounds (“sss”, louder speech)** →
-  The **yellow halo sparks** activate.
+- **High-frequency peaks (“sss”, louder voice)** →
+  Yellow **halo sparks** appear.
 
-- **Stronger speech or sharp peaks** →
-  Core glows brighter, rotates faster, and emits more sparks.
+- **Sharper or louder vocal peaks** →
+  Core glows more, rotates faster, emits more sparks.
 
-- **Background music or far sounds** →
-  Not very reactive — the system is intentionally tuned for
-  **close, human-interaction sound**.
+- **Ambient/room noise or music far from mic** →
+  Almost no reaction.
+  System is intentionally tuned for **close vocal interaction**.
 
 ---
 
-### **How the Audio Reactive System Works**
+# How the Audio Reactive System Works
 
-The system uses a Processing sketch to capture microphone input, run FFT analysis, and extract three frequency bands: **bass**, **mid**, and **treble**.
-These normalized values are sent to the browser via OSC (using oscP5 → WebSocket bridge).
+Processing captures microphone audio → FFT → 3 frequency bands:
 
-In the browser, Three.js receives these values and animates the sphere:
+- **bass** → rotational energy + deformation weight
+- **mid** → smoke complexity/turbulence
+- **treble** → sparks emission
+- **energy** (avg) → glow intensity
 
-- **Bass** → increases rotation speed and adds weight to the deformation
-- **Mid** → enhances turbulence and noise detail of the smoke shader
-- **Treble** → triggers the bright halo sparks around the sphere
-- **Energy** (average) → increases smoke glow and internal luminosity
+Three.js then uses these parameters to animate the sphere, producing a live, voice-reactive visual meant for interactive installations or performances.
 
-This creates an interactive, voice-responsive visual designed for real-time human interaction.
+---
