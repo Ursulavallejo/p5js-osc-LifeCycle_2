@@ -1,6 +1,17 @@
 // version: particles and smoke-like core sphere  + treble halo sparks
+
+//Core Sphere → reacts to audio via noise + shaders
+// Surface Particles → gentle blue orbit
+// Halo Sparks → treble-based bursts
+// Rotation → bass controls speed
+// Glow → energy controls smoke intensity
+// Color → TouchOSC buttons
+// Scale → TouchOSC faders
+// Visibility → TouchOSC toggles
+
 ;(function (global) {
-  const ThreeCore = {}
+  // IIFE
+  const ThreeCore = {} //public object
 
   let scene, camera, renderer
   let coreMesh, particleSystem
@@ -206,7 +217,7 @@
   //   CORE SPHERE WITH SMOKE SHADER
 
   function createCoreMesh(THREE) {
-    const geo = new THREE.SphereGeometry(1.4, 128, 128)
+    const geo = new THREE.SphereGeometry(1.4, 128, 128) //high-resolution sphere
 
     coreUniforms = {
       uTime: { value: 0 },
@@ -216,6 +227,7 @@
       uBaseColor: { value: new THREE.Color(0x88bbdd) }, // core/particles color
     }
 
+    //noise-based displacement
     const vertexShader = /* glsl */ `
       varying vec3 vPos;
       varying vec3 vNormal;
@@ -306,7 +318,7 @@
       void main() {
         vec3 p = position;
 
-   // sample noise in object space and displace along the normal
+   // sample noise in object space and displace along the normal >> Calculates fbm noise (fractal noise) / Moves each vertex outwards using that noise
         float n = fbm(p * uNoiseScale + vec3(0.0, 0.0, uTime * 0.15));
         float disp = n * uDisplacementAmp;
 
@@ -318,10 +330,13 @@
         gl_Position = projectionMatrix * modelViewMatrix * vec4(displaced, 1.0);
       }
     `
-
+    //smoke-like volumetric effect
+    //Recomputes noise inside the sphere for volumetric smoke look, Applies Fresnel lighting (edge glow),Mixes base color + white highlights, Outputs final pixel color and alpha
     const fragmentShader = /* glsl */ `
       varying vec3 vPos;
       varying vec3 vNormal;
+
+      //Uniforms >> Values you control in real time>> modified by audio (FFT bass/mid/tre).
 
       uniform float uTime;
       uniform float uSmokeIntensity;
@@ -413,7 +428,7 @@
        // control smoke holes
         float alpha = smoothstep(0.25, 0.8, n) * uSmokeIntensity;
 
-        // Fresnel-like rim lighting
+        // Fresnel-like rim lighting>> fresnel glow on the rim
         float viewDot = max(dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 0.0);
         float fresnel = pow(1.0 - viewDot, 2.0);
 
@@ -459,6 +474,7 @@
       new THREE.BufferAttribute(positions, 3)
     )
 
+    //additive blending → glowing look///small dots (size = 0.03)/white by default (updated with tint)
     particleMat = new THREE.PointsMaterial({
       color: 0xffffff,
       size: 0.03,
@@ -472,7 +488,7 @@
     scene.add(particleSystem)
   }
 
-  //   INIT
+  //   INIT >> sets up WebGL, scene, camera, lights
 
   ThreeCore.init = function () {
     const THREE = global.THREE
@@ -492,23 +508,24 @@
     el.style.pointerEvents = 'none'
     document.body.appendChild(el)
 
-    scene = new THREE.Scene()
+    scene = new THREE.Scene() //the container for everything.
     camera = new THREE.PerspectiveCamera(
       45,
       global.innerWidth / global.innerHeight,
       0.1,
       100
     )
-    camera.position.z = 5
+    camera.position.z = 5 // so the whole sphere is visible.
 
-    const amb = new THREE.AmbientLight(0xffffff, 0.4)
+    const amb = new THREE.AmbientLight(0xffffff, 0.4) //AmbientLight → soft overall lighting
     scene.add(amb)
 
-    const dir = new THREE.DirectionalLight(0xffffff, 1)
+    const dir = new THREE.DirectionalLight(0xffffff, 1) //DirectionalLight → adds depth
     dir.position.set(3, 3, 5)
     scene.add(dir)
 
     // Order matters: core first (so coreUniforms is ready), then particles→ halo sparks
+    // visuals components
     createCoreMesh(THREE)
     createSurfaceParticles(THREE)
     createHaloSparks(THREE)
@@ -516,6 +533,7 @@
     clock = new THREE.Clock()
     lastTime = 0
 
+    //render loop
     renderer.setAnimationLoop(() => {
       if (!isVisible) return
 
@@ -528,7 +546,7 @@
       }
 
       if (particleSystem) {
-        particleSystem.rotation.y += 0.001
+        particleSystem.rotation.y += 0.001 //They don't move individually — the whole cloud slowly rotates
       }
       if (coreMesh) {
         // coreMesh.rotation.y += 0.002
@@ -549,7 +567,7 @@
     }
   }
 
-  //   EXTERNAL UPDATES (OSC, UI, etc.)
+  //   EXTERNAL UPDATES (OSC, UI, etc.) receives OSC + audio + TouchOSC signals
 
   ThreeCore.update = function (params = {}) {
     const { radius, color, audio } = params
