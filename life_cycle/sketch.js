@@ -274,25 +274,109 @@ async function unlockAudio() {
 // -------------------- Visuals --------------------
 
 // Simple Atoms that opens with p in [0..1]
+// function drawAtomsAtCenter(p, t) {
+//   push()
+//   translate(width / 2, height / 2)
+
+//   const radius = lerp(30, 140, easeOutCubic(p))
+//   const petals = 8
+
+//   for (let i = 0; i < petals; i++) {
+//     const a = (i * TWO_PI) / petals + 0.3 * sin(t * 1.5)
+//     const px = radius * cos(a)
+//     const py = radius * sin(a)
+
+//     fill(255, 140 + 50 * sin(t + i), 180)
+//     ellipse(px, py, 40, 90)
+//   }
+
+//   fill(255, 220, 120)
+//   circle(0, 0, lerp(30, 55, p))
+//   pop()
+// }
+
+// Organic "micro-organism" atoms that open with p in [0..1]
 function drawAtomsAtCenter(p, t) {
   push()
   translate(width / 2, height / 2)
 
-  const radius = lerp(30, 140, easeOutCubic(p))
-  const petals = 8
+  // how many blobs around the center
+  const numBlobs = 6
 
-  for (let i = 0; i < petals; i++) {
-    const a = (i * TWO_PI) / petals + 0.3 * sin(t * 1.5)
-    const px = radius * cos(a)
-    const py = radius * sin(a)
+  // base radius for how far they sit from the center (open/close)
+  const orbitRadius = lerp(40, 180, easeOutCubic(p))
 
-    fill(255, 140 + 50 * sin(t + i), 180)
-    ellipse(px, py, 40, 90)
+  for (let i = 0; i < numBlobs; i++) {
+    const angle = (i * TWO_PI) / numBlobs + 0.4 * sin(t * 0.6 + i)
+
+    // position of each blob around the center
+    const bx = orbitRadius * cos(angle)
+    const by = orbitRadius * sin(angle)
+
+    push()
+    translate(bx, by)
+
+    // base size: grows with p
+    const baseR = lerp(25, 70, 0.4 + 0.6 * p)
+
+    // slight breathing/organic vibration
+    const wobble = 1 + 0.2 * sin(t * 0.7 + i)
+
+    // color: deep midnight blue → electric ice-blue
+    // puedes ajustar estos valores RGB para matizar los tonos
+    const coreColor = {
+      r: 40 + 30 * i,
+      g: 120 + 10 * i,
+      b: 200 + 20 * sin(t * 0.4 + i),
+    }
+
+    drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor)
+    circle(0, 0, lerp(30, 55, p))
+    pop()
   }
 
-  fill(255, 220, 120)
-  circle(0, 0, lerp(30, 55, p))
   pop()
+}
+
+// One organic, semi-transparent "bacteria-like" blob
+function drawOrganicBlob(baseRadius, t, rgb) {
+  const points = 80 // detail for the contour
+
+  noStroke()
+
+  // main body (semi-transparent liquid glass feeling)
+  fill(rgb.r, rgb.g, rgb.b, 180)
+  beginShape()
+  for (let i = 0; i < points; i++) {
+    const a = (TWO_PI * i) / points
+
+    // noise-based deformation of radius
+    // feel free to tweak the 0.8 / 0.3 / 0.25 factors
+    const n = noise(cos(a) * 0.8 + t * 0.12, sin(a) * 0.8 + t * 0.12)
+
+    const r = baseRadius * (0.7 + 0.35 * n)
+    const x = r * cos(a)
+    const y = r * sin(a)
+
+    curveVertex(x, y)
+  }
+  endShape(CLOSE)
+
+  // inner core / nucleus
+  fill(255, 255, 255, 70)
+  ellipse(0, 0, baseRadius * 0.8, baseRadius * 0.8)
+
+  fill(min(255, rgb.r + 40), min(255, rgb.g + 40), min(255, rgb.b + 40), 210)
+  ellipse(0, 0, baseRadius * 0.45, baseRadius * 0.45)
+
+  // small highlight to fake "glossy liquid-glass"
+  fill(255, 255, 255, 90)
+  ellipse(
+    -baseRadius * 0.3,
+    -baseRadius * 0.35,
+    baseRadius * 0.6,
+    baseRadius * 0.4
+  )
 }
 
 function drawMolecularNestBackground(theta) {
