@@ -4,6 +4,7 @@
 // faderVolume: controls Background Music Volume (0..1)
 // faderThree: controls CoreEnergy Three size
 // buttons A/B/C: CoreEnergy tint overrides (Burgundy/Turquoise/Yellow) // Same Three
+// Cells-Micro: MediaPipe hand controls (open/close + rotation) + Processing audio shaping.
 
 window.bgMusic = null
 let socket
@@ -33,11 +34,19 @@ const MIC_SMOOTH = 0.25
 // toggle state to show/hide
 // Convention: 1 → show, 0 → hide
 let showIntro = false
-let showAtoms = false // true: draw atoms, false: hide atoms
+let showCellsMicro = false // true: draw cells / bacteria, false: hide cells
 let showAtomsNestBackground = false
 let showCoreEnergy = false
 let showCoreEnergyThree = false // Three js
 
+// --- Hand / MediaPipe ---
+let video, hands, mpCamera
+
+let handOpenness = 0 // 0..1 (0 = closed hand, 1 = open Hand)
+let useHandForCells = false // Control mode: false = fader, true = hand
+
+let handTwist = 0 // -1..1 (left/right twist of the hand)
+let sHandTwist = 0
 // Smoothing for nicer motion
 let s1 = 0,
   s2 = 0,
@@ -68,6 +77,14 @@ function setup() {
   textAlign(CENTER, CENTER)
   textSize(18)
   fill(255)
+
+  // === p5 video capture (this triggers the camera popup) ===
+  video = createCapture(VIDEO)
+  video.size(640, 480)
+  video.hide() // we don't want to draw the raw video on the canvas
+
+  // === initialize MediaPipe Hands ===
+  initHands()
 
   // Connect to local bridge
   socket = io('http://127.0.0.1:8081')
@@ -112,7 +129,7 @@ function handleOscMessage(msg) {
   const [addr, valRaw] = msg
   const val = Number(valRaw)
 
-  // Intro ON/OFF desde TouchOSC (1 = ON, 0 = OFF)
+  // Intro ON/OFF from TouchOSC (1 = ON, 0 = OFF)
   if (addr === '/2/multitoggle/1/1') {
     showIntro = val === 1
     if (showIntro) {
@@ -127,7 +144,7 @@ function handleOscMessage(msg) {
   if (addr === '/2/multifader/5') faderThree = constrain(val, 0, 1)
   // fader CoreEnergy
   if (addr === '/2/multifader/3') fader1 = constrain(val, 0, 1)
-  // atoms movement
+  // cells movement / openness
   if (addr === '/2/multifader/4') fader2 = constrain(val, 0, 1)
   // Sound volume
   if (addr === '/2/multifader/6') faderVolume = constrain(val, 0, 1)
@@ -148,7 +165,7 @@ function handleOscMessage(msg) {
     puffT = 0
   }
 
-  // Toggles show/hide Atoms and atomNetBackground + Three core
+  // Toggles show/hide Cells, molecular nest background + Three core
   if (addr === '/2/multitoggle/1/5') {
     showCoreEnergyThree = val === 1 // Three.js core ON/OFF
     if (window.ThreeCore && window.ThreeCore.setVisible) {
@@ -158,7 +175,8 @@ function handleOscMessage(msg) {
 
   if (addr === '/2/multitoggle/1/3') showCoreEnergy = val === 1 // CoreEnergy
   if (addr === '/2/multitoggle/1/2') showAtomsNestBackground = val === 1 // atomNetBackground
-  if (addr === '/2/multitoggle/1/4') showAtoms = val === 1 // atoms
+  if (addr === '/2/multitoggle/1/4') showCellsMicro = val === 1 // cells-micro
+  if (addr === '/2/multitoggle/2/4') useHandForCells = val === 1 // hand control ON/OFF
 }
 
 // Processing → /uv/eq [bass, mid, tre]
@@ -181,10 +199,20 @@ function onOscEq(pkt) {
 function draw() {
   background(30)
 
+  let targetOpen = fader2
+
+  if (useHandForCells) {
+    // only hand gesture
+    targetOpen = handOpenness
+    // alternative mix:  targetOpen = 0.5 * fader2 + 0.5 * handOpenness
+  }
   // Smooth the faders
   s1 += (fader1 - s1) * ALPHA
-  s2 += (fader2 - s2) * ALPHA
+  s2 += (targetOpen - s2) * ALPHA
   s3 += (faderThree - s3) * ALPHA
+
+  // Smooth the twist gesture
+  sHandTwist += (handTwist - sHandTwist) * 0.2 // 0.2 = how fast it reacts
 
   // Volume Fader
   if (window.bgMusic && window.bgMusic.isPlaying()) {
@@ -194,7 +222,7 @@ function draw() {
   // --- INTRO FIRST ---
   if (!Intro_isDone() && showIntro) {
     Intro_updateAndDraw(deltaTime / 1000)
-    // no return: intro puede convivir con el resto si quieres
+    // no return: intro can coexist with the rest if you want
   }
 
   // --- Background: rotating molecular nest ---
@@ -243,19 +271,27 @@ function draw() {
     })
   }
 
-  // --- Atoms driven by fader2 (openness 0..1) ---
-  if (showAtoms) {
-    drawAtomsAtCenter(s2, frameCount * 0.02)
+  // --- Cells Micro Organism ring driven by fader2 / hand (openness 0..1) ---
+  if (showCellsMicro) {
+    drawCellRing(s2, frameCount * 0.02)
   }
 
-  // HUD (opcional)
+  // HUD (optional)
   fill(255)
   noStroke()
+  textAlign(LEFT, TOP)
+  text(
+    `open: ${handOpenness.toFixed(2)}\n` +
+      `twist: ${handTwist.toFixed(2)}\n` +
+      `sTwist: ${sHandTwist.toFixed(2)}`,
+    10,
+    10
+  )
   // text(`bass:${micBass.toFixed(2)} mid:${micMid.toFixed(2)} tre:${micTre.toFixed(2)}`,
   //   width / 2, height - 28)
 }
 
-// -------------------- sound -------------------
+// -------------------- sound --------------------
 async function unlockAudio() {
   try {
     if (getAudioContext().state !== 'running') {
@@ -273,70 +309,52 @@ async function unlockAudio() {
 
 // -------------------- Visuals --------------------
 
-// Simple Atoms that opens with p in [0..1]
-// function drawAtomsAtCenter(p, t) {
-//   push()
-//   translate(width / 2, height / 2)
-
-//   const radius = lerp(30, 140, easeOutCubic(p))
-//   const petals = 8
-
-//   for (let i = 0; i < petals; i++) {
-//     const a = (i * TWO_PI) / petals + 0.3 * sin(t * 1.5)
-//     const px = radius * cos(a)
-//     const py = radius * sin(a)
-
-//     fill(255, 140 + 50 * sin(t + i), 180)
-//     ellipse(px, py, 40, 90)
-//   }
-
-//   fill(255, 220, 120)
-//   circle(0, 0, lerp(30, 55, p))
-//   pop()
-// }
-
-// Organic "micro-organism" atoms that open with p in [0..1]
-function drawAtomsAtCenter(p, t) {
+// Ring of organic cells that opens with p in [0..1]
+function drawCellRing(p, t) {
   push()
   translate(width / 2, height / 2)
 
-  // how many blobs around the center
-  const numBlobs = 6
+  const numCells = 7
 
-  // base radius for how far they sit from the center (open/close)
-  const orbitRadius = lerp(40, 180, easeOutCubic(p))
+  // how far from center (open/close)
+  const orbitRadius = lerp(0, 210, easeOutCubic(p))
 
-  for (let i = 0; i < numBlobs; i++) {
-    const angle = (i * TWO_PI) / numBlobs + 0.4 * sin(t * 0.6 + i)
+  // overall audio energy 0..1 (uses globals from Processing)
+  const audioEnergy = constrain((micBass + micMid + micTre) / 3, 0, 1)
+  // twist factor from the hand (-PI..PI approx)
+  const ringTwistAngle = sHandTwist * PI // try up to 180º
 
-    // position of each blob around the center
-    const bx = orbitRadius * cos(angle)
-    const by = orbitRadius * sin(angle)
+  // rotate the whole ring of cells according to the hand twist
+  rotate(ringTwistAngle)
+
+  for (let i = 0; i < numCells; i++) {
+    // base angle plus small wobble
+    const angle = (i * TWO_PI) / numCells + 0.25 * sin(t * 0.7 + i * 1.3)
+
+    // break the perfect circle a bit
+    const localOrbit =
+      orbitRadius * (0.9 + 0.12 * sin(t * 0.9 + i * 0.8) + 0.08 * audioEnergy)
+
+    const bx = localOrbit * cos(angle)
+    const by = localOrbit * sin(angle)
 
     push()
     translate(bx, by)
 
-    // base size: grows with p
-    const baseR = lerp(25, 70, 0.4 + 0.6 * p)
+    // base size also depends on openness + audio
+    const baseR = lerp(26, 80, 0.4 + 0.6 * p) * (0.9 + 0.3 * audioEnergy)
 
-    // slight breathing/organic vibration
-    const wobble = 1 + 0.2 * sin(t * 0.7 + i)
+    // small beating motion
+    const wobble = 1 + 0.18 * sin(t * 0.9 + i * 0.7)
 
-    // color: deep midnight blue → electric ice-blue
-    // puedes ajustar estos valores RGB para matizar los tonos
+    // deep blue → more cyan on some
     const coreColor = {
-      r: 40 + 30 * i,
-      g: 120 + 10 * i,
-      b: 200 + 20 * sin(t * 0.4 + i),
+      r: 40 + 10 * i,
+      g: 110 + 30 * sin(t * 0.3 + i),
+      b: 200 + 25 * cos(t * 0.4 + i),
     }
 
-    // drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor)
-    // dentro del for de cada blob alrededor del centro:
-    if (i % 2 === 0) {
-      drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor) // célula dorada
-    } else {
-      drawGlassCluster(baseR * 0.8 * wobble, t + i * 5.0) // blob azul
-    }
+    drawCell(baseR * wobble, t + i * 8.7, coreColor, audioEnergy)
 
     pop()
   }
@@ -344,80 +362,46 @@ function drawAtomsAtCenter(p, t) {
   pop()
 }
 
-// One organic, semi-transparent "bacteria-like" blob BASIC OPTION
-// function drawOrganicBlob(baseRadius, t, rgb) {
-//   const points = 80 // detail for the contour
+// One organic, glowing "cell-like" organism
+function drawCell(baseRadius, t, rgb, audioEnergy = 0) {
+  const points = 95
 
-//   noStroke()
-
-//   // main body (semi-transparent liquid glass feeling)
-//   fill(rgb.r, rgb.g, rgb.b, 180)
-//   beginShape()
-//   for (let i = 0; i < points; i++) {
-//     const a = (TWO_PI * i) / points
-
-//     // noise-based deformation of radius
-//     // feel free to tweak the 0.8 / 0.3 / 0.25 factors
-//     const n = noise(cos(a) * 0.8 + t * 0.12, sin(a) * 0.8 + t * 0.12)
-
-//     const r = baseRadius * (0.7 + 0.35 * n)
-//     const x = r * cos(a)
-//     const y = r * sin(a)
-
-//     curveVertex(x, y)
-//   }
-//   endShape(CLOSE)
-
-//   // inner core / nucleus
-//   fill(255, 255, 255, 70)
-//   ellipse(0, 0, baseRadius * 0.8, baseRadius * 0.8)
-
-//   fill(min(255, rgb.r + 40), min(255, rgb.g + 40), min(255, rgb.b + 40), 210)
-//   ellipse(0, 0, baseRadius * 0.45, baseRadius * 0.45)
-
-//   // small highlight to fake "glossy liquid-glass"
-//   fill(255, 255, 255, 90)
-//   ellipse(
-//     -baseRadius * 0.3,
-//     -baseRadius * 0.35,
-//     baseRadius * 0.6,
-//     baseRadius * 0.4
-//   )
-// }
-
-// One organic, glowing "cell-like" blob BACTERIA YELLOW OPTION
-function drawOrganicBlob(baseRadius, t, rgb) {
-  const points = 90 // más detalle en el borde
-
-  // un poco más de suavidad en el ruido
-  noiseDetail(3, 0.5)
+  // softer, layered noise
+  noiseDetail(3, 0.55)
 
   push()
 
-  // --- halo de brillo exterior ---
+  // --- outer halo (breathes with audio) ---
   drawingContext.save()
-  drawingContext.shadowBlur = baseRadius * 0.9
+  drawingContext.shadowBlur = baseRadius * (0.7 + 0.8 * audioEnergy)
   drawingContext.shadowColor = `rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`
 
   noStroke()
-  fill(rgb.r, rgb.g, rgb.b, 30)
-  ellipse(0, 0, baseRadius * 2.4, baseRadius * 2.4)
+  fill(rgb.r, rgb.g, rgb.b, 28 + 40 * audioEnergy)
+  ellipse(
+    0,
+    0,
+    baseRadius * (2.1 + 0.7 * audioEnergy),
+    baseRadius * (2.1 + 0.7 * audioEnergy)
+  )
 
   drawingContext.restore()
 
-  // --- membrana ondulada semitransparente ---
+  // --- membrane (wobbly contour) ---
   noStroke()
-  fill(rgb.r, rgb.g, rgb.b, 120) // membrana líquida
+  fill(rgb.r, rgb.g, rgb.b, 125)
 
   beginShape()
   for (let i = 0; i < points; i++) {
     const a = (TWO_PI * i) / points
 
-    // deformación del radio con noise
-    const n = noise(cos(a) * 0.9 + t * 0.15, sin(a) * 0.9 + t * 0.15)
+    // layered noise for more organic edge
+    const n1 = noise(cos(a) * 0.8 + t * 0.18, sin(a) * 0.8 + t * 0.18)
+    const n2 = noise(cos(a + 1.7) * 1.3 + t * 0.1, sin(a + 3.1) * 1.3 + t * 0.1)
 
-    // picos como “corona” suave
-    const r = baseRadius * (0.75 + 0.45 * n)
+    const n = lerp(n1, n2, 0.5 + 0.5 * audioEnergy)
+    const r = baseRadius * (0.78 + 0.35 * n + 0.15 * audioEnergy * n)
+
     const x = r * cos(a)
     const y = r * sin(a)
 
@@ -425,73 +409,43 @@ function drawOrganicBlob(baseRadius, t, rgb) {
   }
   endShape(CLOSE)
 
-  // --- núcleo brillante (core naranja) ---
-  // halo suave
-  fill(255, 180, 80, 80)
-  ellipse(0, 0, baseRadius * 1.2, baseRadius * 1.2)
+  // --- soft inner halo ---
+  fill(255, 190, 90, 80 + 60 * audioEnergy)
+  ellipse(0, 0, baseRadius * 1.15, baseRadius * 1.15)
 
-  // núcleo principal
-  fill(255, 180, 60, 230)
+  // --- main core ---
+  fill(255, 190, 70, 235)
   ellipse(0, 0, baseRadius * 0.8, baseRadius * 0.8)
 
-  // puntitos internos (como partículas dentro de la célula)
-  const dots = 45
+  // --- spark-like granules inside ---
+  const dots = 55
   for (let i = 0; i < dots; i++) {
-    const r = random(baseRadius * 0.1, baseRadius * 0.35)
-    const a = random(TWO_PI)
+    // noise instead of pure random → twinkle, but not totally chaotic
+    const k = noise(i * 0.37, t * 1.1)
+
+    const r = lerp(baseRadius * 0.1, baseRadius * 0.36, k)
+    const a = i * (TWO_PI / dots) + t * 0.15
+
     const x = r * cos(a)
     const y = r * sin(a)
 
-    fill(255, 210, 120, 160)
-    circle(x, y, random(2, 4))
+    const size = lerp(1.5, 4, k) * (1.0 + 0.6 * audioEnergy)
+    const alpha = 120 + 80 * k + 40 * audioEnergy
+
+    fill(255, 215, 140, alpha)
+    circle(x, y, size)
   }
 
-  // --- highlight para efecto “liquid glass” ---
-  fill(255, 255, 255, 120)
+  // --- glossy highlight ---
+  fill(255, 255, 255, 135)
   ellipse(
     -baseRadius * 0.35,
-    -baseRadius * 0.4,
+    -baseRadius * 0.42,
     baseRadius * 0.7,
-    baseRadius * 0.45
+    baseRadius * 0.46
   )
 
   pop()
-}
-function drawGlassCluster(baseRadius, t) {
-  const bubbles = 7
-
-  for (let i = 0; i < bubbles; i++) {
-    const a = (TWO_PI * i) / bubbles + 0.4 * sin(t * 0.6 + i)
-    const r = baseRadius * (0.4 + 0.15 * sin(t * 0.4 + i))
-
-    const x = r * cos(a)
-    const y = r * sin(a)
-
-    push()
-    translate(x, y)
-
-    const localR = baseRadius * (0.55 + 0.2 * sin(t * 0.8 + i))
-
-    // halo
-    drawingContext.save()
-    drawingContext.shadowBlur = localR * 0.8
-    drawingContext.shadowColor = 'rgba(40,140,220,0.55)'
-    noStroke()
-    fill(40, 130, 220, 80)
-    ellipse(0, 0, localR * 2.0, localR * 2.0)
-    drawingContext.restore()
-
-    // cuerpo de vidrio
-    noStroke()
-    fill(25, 90, 200, 220)
-    ellipse(0, 0, localR * 1.4, localR * 1.4)
-
-    // highlight
-    fill(255, 255, 255, 120)
-    ellipse(-localR * 0.3, -localR * 0.35, localR * 0.7, localR * 0.5)
-
-    pop()
-  }
 }
 
 function drawMolecularNestBackground(theta) {
@@ -561,6 +515,89 @@ function CoreEnergy_resize() {
   CE_layer.pixelDensity(1)
   CE_layer.imageMode(CENTER)
   CE_layer.colorMode(HSB, 360, 100, 100, 255)
+}
+
+// -------------------- Hands --------------------
+
+function initHands() {
+  hands = new Hands({
+    locateFile: (file) => {
+      return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+    },
+  })
+
+  hands.setOptions({
+    maxNumHands: 1,
+    modelComplexity: 1,
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.5,
+  })
+
+  hands.onResults(onHandsResults)
+
+  // use MediaPipe Camera utility to feed frames from p5 video
+  mpCamera = new Camera(video.elt, {
+    onFrame: async () => {
+      await hands.send({ image: video.elt })
+    },
+    width: 640,
+    height: 480,
+  })
+
+  mpCamera.start()
+}
+
+function onHandsResults(results) {
+  if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+    const landmarks = results.multiHandLandmarks[0]
+    updateHandGesturesFromLandmarks(landmarks)
+  }
+}
+
+// landmarks: array of 21 points {x,y,z} in normalized 0..1 coords
+function updateHandGesturesFromLandmarks(landmarks) {
+  if (!landmarks || landmarks.length < 21) return
+
+  const wrist = landmarks[0]
+  const middleTip = landmarks[12]
+  const middleMcp = landmarks[9]
+
+  // --- hand scale (approx size of detected hand) ---
+  const sx = middleMcp.x - wrist.x
+  const sy = middleMcp.y - wrist.y
+  const handScale = Math.sqrt(sx * sx + sy * sy) + 1e-6
+
+  // --- openness: wrist ↔ middle fingertip distance, normalized by hand scale ---
+  const dx = middleTip.x - wrist.x
+  const dy = middleTip.y - wrist.y
+  const d = Math.sqrt(dx * dx + dy * dy) // 0..~0.4 approx
+
+  const dNorm = d / handScale
+
+  const MIN_D = 0.8 // closed fist
+  const MAX_D = 1.6 // fully open hand
+
+  let open = map(dNorm, MIN_D, MAX_D, 0, 1)
+  open = constrain(open, 0, 1)
+  handOpenness = open
+
+  // --- twist of the hand (orientation from wrist → index base) ---
+  const indexMcp = landmarks[5] // base of index finger
+
+  const vx = indexMcp.x - wrist.x
+  const vy = indexMcp.y - wrist.y
+
+  // angle of that vector in radians
+  const angle = Math.atan2(vy, vx) // ~[-PI, PI]
+
+  // you can calibrate these values by logging console.log(angle)
+  const MIN_A = -1.2 // hand rotated to one side
+  const MAX_A = 1.2 // hand rotated to the other side
+
+  let twist = map(angle, MIN_A, MAX_A, -1, 1)
+  twist = constrain(twist, -1, 1)
+
+  handTwist = twist
 }
 
 function windowResized() {
