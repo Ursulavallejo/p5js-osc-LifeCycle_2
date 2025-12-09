@@ -330,31 +330,94 @@ function drawAtomsAtCenter(p, t) {
       b: 200 + 20 * sin(t * 0.4 + i),
     }
 
-    drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor)
-    circle(0, 0, lerp(30, 55, p))
+    // drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor)
+    // dentro del for de cada blob alrededor del centro:
+    if (i % 2 === 0) {
+      drawOrganicBlob(baseR * wobble, t + i * 10.0, coreColor) // célula dorada
+    } else {
+      drawGlassCluster(baseR * 0.8 * wobble, t + i * 5.0) // blob azul
+    }
+
     pop()
   }
 
   pop()
 }
 
-// One organic, semi-transparent "bacteria-like" blob
+// One organic, semi-transparent "bacteria-like" blob BASIC OPTION
+// function drawOrganicBlob(baseRadius, t, rgb) {
+//   const points = 80 // detail for the contour
+
+//   noStroke()
+
+//   // main body (semi-transparent liquid glass feeling)
+//   fill(rgb.r, rgb.g, rgb.b, 180)
+//   beginShape()
+//   for (let i = 0; i < points; i++) {
+//     const a = (TWO_PI * i) / points
+
+//     // noise-based deformation of radius
+//     // feel free to tweak the 0.8 / 0.3 / 0.25 factors
+//     const n = noise(cos(a) * 0.8 + t * 0.12, sin(a) * 0.8 + t * 0.12)
+
+//     const r = baseRadius * (0.7 + 0.35 * n)
+//     const x = r * cos(a)
+//     const y = r * sin(a)
+
+//     curveVertex(x, y)
+//   }
+//   endShape(CLOSE)
+
+//   // inner core / nucleus
+//   fill(255, 255, 255, 70)
+//   ellipse(0, 0, baseRadius * 0.8, baseRadius * 0.8)
+
+//   fill(min(255, rgb.r + 40), min(255, rgb.g + 40), min(255, rgb.b + 40), 210)
+//   ellipse(0, 0, baseRadius * 0.45, baseRadius * 0.45)
+
+//   // small highlight to fake "glossy liquid-glass"
+//   fill(255, 255, 255, 90)
+//   ellipse(
+//     -baseRadius * 0.3,
+//     -baseRadius * 0.35,
+//     baseRadius * 0.6,
+//     baseRadius * 0.4
+//   )
+// }
+
+// One organic, glowing "cell-like" blob BACTERIA YELLOW OPTION
 function drawOrganicBlob(baseRadius, t, rgb) {
-  const points = 80 // detail for the contour
+  const points = 90 // más detalle en el borde
+
+  // un poco más de suavidad en el ruido
+  noiseDetail(3, 0.5)
+
+  push()
+
+  // --- halo de brillo exterior ---
+  drawingContext.save()
+  drawingContext.shadowBlur = baseRadius * 0.9
+  drawingContext.shadowColor = `rgba(${rgb.r},${rgb.g},${rgb.b},0.55)`
 
   noStroke()
+  fill(rgb.r, rgb.g, rgb.b, 30)
+  ellipse(0, 0, baseRadius * 2.4, baseRadius * 2.4)
 
-  // main body (semi-transparent liquid glass feeling)
-  fill(rgb.r, rgb.g, rgb.b, 180)
+  drawingContext.restore()
+
+  // --- membrana ondulada semitransparente ---
+  noStroke()
+  fill(rgb.r, rgb.g, rgb.b, 120) // membrana líquida
+
   beginShape()
   for (let i = 0; i < points; i++) {
     const a = (TWO_PI * i) / points
 
-    // noise-based deformation of radius
-    // feel free to tweak the 0.8 / 0.3 / 0.25 factors
-    const n = noise(cos(a) * 0.8 + t * 0.12, sin(a) * 0.8 + t * 0.12)
+    // deformación del radio con noise
+    const n = noise(cos(a) * 0.9 + t * 0.15, sin(a) * 0.9 + t * 0.15)
 
-    const r = baseRadius * (0.7 + 0.35 * n)
+    // picos como “corona” suave
+    const r = baseRadius * (0.75 + 0.45 * n)
     const x = r * cos(a)
     const y = r * sin(a)
 
@@ -362,21 +425,73 @@ function drawOrganicBlob(baseRadius, t, rgb) {
   }
   endShape(CLOSE)
 
-  // inner core / nucleus
-  fill(255, 255, 255, 70)
+  // --- núcleo brillante (core naranja) ---
+  // halo suave
+  fill(255, 180, 80, 80)
+  ellipse(0, 0, baseRadius * 1.2, baseRadius * 1.2)
+
+  // núcleo principal
+  fill(255, 180, 60, 230)
   ellipse(0, 0, baseRadius * 0.8, baseRadius * 0.8)
 
-  fill(min(255, rgb.r + 40), min(255, rgb.g + 40), min(255, rgb.b + 40), 210)
-  ellipse(0, 0, baseRadius * 0.45, baseRadius * 0.45)
+  // puntitos internos (como partículas dentro de la célula)
+  const dots = 45
+  for (let i = 0; i < dots; i++) {
+    const r = random(baseRadius * 0.1, baseRadius * 0.35)
+    const a = random(TWO_PI)
+    const x = r * cos(a)
+    const y = r * sin(a)
 
-  // small highlight to fake "glossy liquid-glass"
-  fill(255, 255, 255, 90)
+    fill(255, 210, 120, 160)
+    circle(x, y, random(2, 4))
+  }
+
+  // --- highlight para efecto “liquid glass” ---
+  fill(255, 255, 255, 120)
   ellipse(
-    -baseRadius * 0.3,
     -baseRadius * 0.35,
-    baseRadius * 0.6,
-    baseRadius * 0.4
+    -baseRadius * 0.4,
+    baseRadius * 0.7,
+    baseRadius * 0.45
   )
+
+  pop()
+}
+function drawGlassCluster(baseRadius, t) {
+  const bubbles = 7
+
+  for (let i = 0; i < bubbles; i++) {
+    const a = (TWO_PI * i) / bubbles + 0.4 * sin(t * 0.6 + i)
+    const r = baseRadius * (0.4 + 0.15 * sin(t * 0.4 + i))
+
+    const x = r * cos(a)
+    const y = r * sin(a)
+
+    push()
+    translate(x, y)
+
+    const localR = baseRadius * (0.55 + 0.2 * sin(t * 0.8 + i))
+
+    // halo
+    drawingContext.save()
+    drawingContext.shadowBlur = localR * 0.8
+    drawingContext.shadowColor = 'rgba(40,140,220,0.55)'
+    noStroke()
+    fill(40, 130, 220, 80)
+    ellipse(0, 0, localR * 2.0, localR * 2.0)
+    drawingContext.restore()
+
+    // cuerpo de vidrio
+    noStroke()
+    fill(25, 90, 200, 220)
+    ellipse(0, 0, localR * 1.4, localR * 1.4)
+
+    // highlight
+    fill(255, 255, 255, 120)
+    ellipse(-localR * 0.3, -localR * 0.35, localR * 0.7, localR * 0.5)
+
+    pop()
+  }
 }
 
 function drawMolecularNestBackground(theta) {
