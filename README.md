@@ -52,6 +52,10 @@ Browser
 
 ---
 
+<iframe style="border: 1px solid rgba(0, 0, 0, 0.1);" width="800" height="450" src="https://embed.figma.com/slides/RPa9w7NlXLYFx9Jgz5n0gZ/LifeCycle?node-id=1-36&embed-host=share" allowfullscreen></iframe>
+
+---
+
 # 🚀 How to Run the Project
 
 ## 1. Start Processing
