@@ -307,8 +307,8 @@ io.on('connection', (socket) => {
         DEFAULT_OSC_CLIENT_HOST,
         DEFAULT_OSC_CLIENT_PORT
       )
-      // Nota: dejamos audioServer vivo para que Processing pueda seguir enviando,
-      // incluso si no hay clientes web conectados. Se cierra solo en shutdown().
+      // Note: we keep the audioServer alive so Processing can continue sending data,
+      // even if no web clients are connected. It only shuts down during shutdown().
     }
   })
 })

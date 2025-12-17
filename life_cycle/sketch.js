@@ -276,7 +276,7 @@ function draw() {
     drawCellRing(s2, frameCount * 0.02)
   }
 
-  // HUD (optional)
+  // HUD (optional) >> See info we use for dev
   fill(255)
   noStroke()
   textAlign(LEFT, TOP)
@@ -287,8 +287,12 @@ function draw() {
     10,
     10
   )
-  // text(`bass:${micBass.toFixed(2)} mid:${micMid.toFixed(2)} tre:${micTre.toFixed(2)}`,
-  //   width / 2, height - 28)
+
+  // --- Show camera on the corner DEV ---
+  push()
+  translate(20, height - 170) // margin bottom-left
+  image(video, 0, 0, 200, 150)
+  pop()
 }
 
 // -------------------- sound --------------------

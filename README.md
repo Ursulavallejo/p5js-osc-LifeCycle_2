@@ -1,4 +1,4 @@
-## LifeCycle : Interactive MIDO ( p5.js + TouchOSC + OSC Bridge + Processing)
+## LifeCycle : Interactive MIDO - Musical / Multimodal Digital Object ( p5.js + TouchOSC + OSC Bridge + Processing + MediaPipe)
 
 **By Ursula Vallejo Janne**
 Creative coder · Visual artist · Interaction design experiments
@@ -10,6 +10,7 @@ Processing captures the microphone input, performs FFT analysis, and sends the f
 
 The system simulates:
 
+- Organic cells and micro-particle entities
 - Molecular nests
 - Atom clusters
 - A voice-reactive energy core (Three.js)
@@ -17,7 +18,7 @@ The system simulates:
 - Color-shifting phases
 - A small particle “bloom puff” burst
 
-All components react to both audio and TouchOSC controls, turning the interface into an **instrument for shaping cosmic molecular structures**.
+TouchOSC provides global control over the visual parameters, while audio analysis is mapped specifically to the energy core and cellular particle systems.
 
 ---
 
@@ -34,13 +35,16 @@ TouchOSC App (iPad/iPhone)
         ↓   OSC
 Node.js Bridge (bridge.js)
         ↓   WebSockets
-Browser → p5.js / Three.js Visual Engine
+Browser
+ ├─ p5.js / Three.js Visual Engine
+ └─ MediaPipe Hands (Camera → Hand Landmarks)
 ```
 
 - TouchOSC sends OSC messages (faders, toggles, buttons).
 - `bridge.js` receives them and forwards to the browser via Socket.IO.
-- Processing sends FFT (bass/mid/tre) → OSC → browser.
-- p5.js & Three.js render all visuals.
+- Processing analyzes audio input (FFT: bass / mid / treble) and sends data via OSC.
+- p5.js & Three.js combine OSC data, audio features, and hand landmarks to render and modulate the visuals.
+- MediaPipe Hands runs in the browser, detects hand pose from the webcam, and outputs hand landmarks in real time.
 
 ---
 
@@ -94,23 +98,26 @@ Preset used → **Beatmachine Mk2 / Steps layer**
 
 - **Toggle 2** → Molecular nest (background atoms)
 
-- **Toggle 3** →
+- **Toggle 3** → Frame delay we used insted Three.js
 
-  - Show Energy Core
+  - Show Energy Core p5
   - Buttons A/B/C → color shifts
   - Fader → energy core size
 
 - **Toggle 4** →
 
-  - Show atomic molecules
-  - Fader → open/close atom cluster
+  - Show cells (micro-organisms)
+  - Fader → open / close the cell cluster
+  - Toggle 4 / 2 → enable hand control (open / close)
+  - Rotation is always active
 
 - **Toggle 5** →
 
-  - Show demo circles
-  - Fader → size
+  - Show Energy Core Three.js
+  - Buttons A/B/C → color shifts
+  - Fader → energy core size
 
-- **Fader 6** → Background music volume
+- **Fader 6** → Control background music volume
 
 - **Round button (top)** → Puff explosion (particle burst)
 
@@ -145,8 +152,7 @@ http://localhost:5500/index.html
 
 - Intro text animation
 - CoreEnergy (Three.js smoke + deformation + tint)
-- SmokeCore (curl-noise sphere)
-- Atomic molecules
+- Cells (micro-organisms) - MediaPipe (Hand gestures)
 - Molecular nest
 - “Puff” particle explosion
 - Full audio engine (p5 + Processing FFT)
@@ -166,7 +172,7 @@ http://localhost:5500/index.html
 
 ---
 
-# Signal Flow
+## Signal Flow
 
 ```
 Human voice → Microphone → Processing (FFT)
@@ -177,7 +183,7 @@ Human voice → Microphone → Processing (FFT)
 
 ---
 
-# How It Feels in Practice
+## How It Feels in Practice
 
 - **Normal speaking** →
   Inner smoke reacts: swirling, deforming, glowing.
@@ -194,7 +200,7 @@ Human voice → Microphone → Processing (FFT)
 
 ---
 
-# How the Audio Reactive System Works
+## How the Audio Reactive System Works
 
 Processing captures microphone audio → FFT → 3 frequency bands:
 
@@ -206,3 +212,23 @@ Processing captures microphone audio → FFT → 3 frequency bands:
 Three.js then uses these parameters to animate the sphere, producing a live, voice-reactive visual meant for interactive installations or performances.
 
 ---
+
+# Hand Tracking & Gesture Control (MediaPipe)
+
+MediaPipe Hands runs directly in the browser and provides real-time hand pose detection using the device’s webcam.
+
+- It tracks 21 landmarks per hand (fingers, palm, joints).
+
+- No OSC or external server is used for gesture detection.
+
+- Hand data is processed locally and merged into the visual state.
+
+In LifeCycle, MediaPipe is used specifically to control the Cells (micro-organisms) layer:
+
+- Hand open / close → opens or contracts the cell cluster
+
+- Gesture input can be enabled or disabled via TouchOSC
+
+- Rotation remains constant and is not gesture-driven
+
+## This allows physical, embodied interaction to coexist with audio-driven and UI-driven control, reinforcing the system’s multimodal instrument design.
