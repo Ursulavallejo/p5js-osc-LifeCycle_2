@@ -238,4 +238,4 @@ In LifeCycle, MediaPipe is used specifically to control the Cells (micro-organis
 
 - Rotation remains constant and is not gesture-driven
 
-## This allows physical, embodied interaction to coexist with audio-driven and UI-driven control, reinforcing the system’s multimodal instrument design.
+#### This allows physical, embodied interaction to coexist with audio-driven and UI-driven control, reinforcing the system’s multimodal instrument design.
