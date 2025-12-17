@@ -51,8 +51,8 @@ Browser
 - MediaPipe Hands runs in the browser, detects hand pose from the webcam, and outputs hand landmarks in real time.
 
 ---
+### [Slides Structure ](https://missing-cats-goteborg.netlify.app/](https://www.figma.com/deck/RPa9w7NlXLYFx9Jgz5n0gZ/LifeCycle?node-id=1-36&t=6dj0PKimXNfSwRsh-1)
 
-https://www.figma.com/deck/RPa9w7NlXLYFx9Jgz5n0gZ/LifeCycle?node-id=1-36&t=6dj0PKimXNfSwRsh-1
 ---
 
 # 🚀 How to Run the Project
