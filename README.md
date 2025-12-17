@@ -1,4 +1,6 @@
-## LifeCycle : Interactive MIDO - Musical / Multimodal Digital Object ( p5.js + TouchOSC + OSC Bridge + Processing + MediaPipe)
+## LifeCycle : Interactive MIDO - Musical / Multimodal Digital Object
+
+( p5.js + TouchOSC + OSC Bridge + Processing + MediaPipe)
 
 **By Ursula Vallejo Janne**
 Creative coder · Visual artist · Interaction design experiments
