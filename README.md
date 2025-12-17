@@ -26,7 +26,9 @@ TouchOSC provides global control over the visual parameters, while audio analysi
 
 ## Video
 
-_(Add your link when ready)_
+
+https://github.com/user-attachments/assets/a9f2e152-b1c1-4347-bdc7-e9f98488c4b7
+
 
 ---
 
