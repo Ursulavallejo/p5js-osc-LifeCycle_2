@@ -1,5 +1,5 @@
 /**
- * === Genesis Sphere — Audio Analysis via Processing → OSC Bridge ===
+ * === Audio Analysis via Processing → OSC Bridge ===
  *
  * This Processing (Java) sketch captures live audio from the microphone,
  * performs a real-time frequency analysis (FFT) with a per-band noise gate
