@@ -42,6 +42,10 @@ https://github.com/user-attachments/assets/d8cd832c-d4a6-409c-80c7-08ddf62cd23e
 
 
 
+https://github.com/user-attachments/assets/3f5ef7a6-7876-41c4-8a09-6cc845d56b5c
+
+
+
 ---
 
 #### Demo MediaPipe/  Hand Gestures
