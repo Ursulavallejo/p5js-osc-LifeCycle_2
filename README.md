@@ -24,10 +24,28 @@ TouchOSC provides global control over the visual parameters, while audio analysi
 
 ---
 
-## Video
+## Video Overview
 
 
 https://github.com/user-attachments/assets/a9f2e152-b1c1-4347-bdc7-e9f98488c4b7
+
+---
+
+#### Demo Touch OSC Contol
+
+
+https://github.com/user-attachments/assets/d8cd832c-d4a6-409c-80c7-08ddf62cd23e
+
+---
+
+#### Demo Processing / Audio interaction
+
+
+
+---
+
+#### Demo MediaPipe/  Hand Gestures
+
 
 
 ---
